@@ -1,4 +1,6 @@
 import sys
+import threading
+import winsound
 
 from PyQt6.QtCore import Qt, QRect, QRectF
 from PyQt6.QtGui import QBrush, QColor, QIcon, QPainter, QPen, QPixmap
@@ -10,6 +12,13 @@ from spkup.hotkey import HotkeyListener
 from spkup.overlay import OverlayState, OverlayWidget
 from spkup.recorder import AudioRecorder
 from spkup.transcriber import Transcriber
+
+
+def _beep(freq: int, duration_ms: int) -> None:
+    """Play a tone asynchronously so it never blocks the Qt event loop."""
+    threading.Thread(
+        target=winsound.Beep, args=(freq, duration_ms), daemon=True
+    ).start()
 
 
 def _make_tray_icon(size: int = 64, color: str = "#ffffff") -> QIcon:
@@ -154,6 +163,7 @@ class App:
         self._tray.setIcon(_make_tray_icon(color="#ff4444"))
         self._recorder.start()
         self._overlay.show_state(OverlayState.RECORDING)
+        _beep(880, 70)
 
     def _on_recording_stopped(self) -> None:
         self._tray.setIcon(_make_tray_icon(color="#ffffff"))
@@ -176,6 +186,10 @@ class App:
     def _on_transcription_finished(self, text: str) -> None:
         copy_to_clipboard(text)
         self._overlay.show_state(OverlayState.DONE)
+        threading.Thread(
+            target=lambda: (winsound.Beep(880, 55), winsound.Beep(1108, 90)),
+            daemon=True,
+        ).start()
         if QSystemTrayIcon.supportsMessages():
             self._tray.showMessage(
                 "spkup",

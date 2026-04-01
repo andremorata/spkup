@@ -141,14 +141,20 @@ class OverlayWidget(QWidget):
         w, h = self.width(), self.height()
         pos = self._overlay_position
 
+        cx = avail.left() + (avail.width() - w) // 2
+
         if pos == "bottom-right":
             x, y = avail.right() - w - _MARGIN, avail.bottom() - h - _MARGIN
         elif pos == "bottom-left":
             x, y = avail.left() + _MARGIN, avail.bottom() - h - _MARGIN
+        elif pos == "bottom-center":
+            x, y = cx, avail.bottom() - h - _MARGIN
         elif pos == "top-right":
             x, y = avail.right() - w - _MARGIN, avail.top() + _MARGIN
         elif pos == "top-left":
             x, y = avail.left() + _MARGIN, avail.top() + _MARGIN
+        elif pos == "top-center":
+            x, y = cx, avail.top() + _MARGIN
         else:
             x, y = avail.right() - w - _MARGIN, avail.bottom() - h - _MARGIN
 

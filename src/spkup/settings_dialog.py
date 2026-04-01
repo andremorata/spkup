@@ -210,7 +210,8 @@ class SettingsDialog(QDialog):
         main_layout.addWidget(QLabel("Overlay position"))
         self._overlay_combo = QComboBox()
         self._overlay_combo.addItems(
-            ["bottom-right", "bottom-left", "top-right", "top-left"]
+            ["bottom-right", "bottom-center", "bottom-left",
+             "top-right", "top-center", "top-left"]
         )
         self._overlay_combo.setCurrentText(config.overlay_position)
         self._overlay_combo.currentTextChanged.connect(
