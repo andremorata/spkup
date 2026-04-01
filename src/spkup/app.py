@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import QApplication, QMenu, QMessageBox, QSystemTrayIcon
 
 from spkup.config import load
 from spkup.hotkey import HotkeyListener
+from spkup.recorder import AudioRecorder
 
 
 def _make_tray_icon(size: int = 64, color: str = "#ffffff") -> QIcon:
@@ -63,6 +64,10 @@ class App:
         self._app = QApplication.instance() or QApplication(sys.argv)
         self._app.setQuitOnLastWindowClosed(False)
         self._config = load()
+        self._recorder = AudioRecorder(max_seconds=self._config.max_recording_seconds)
+        self._recorder.recording_finished.connect(self._on_recording_finished)
+        self._recorder.recording_error.connect(self._on_recording_error)
+
         self._listener = HotkeyListener(self._config.hotkey)
         self._listener.recording_started.connect(self._on_recording_started)
         self._listener.recording_stopped.connect(self._on_recording_stopped)
@@ -88,13 +93,23 @@ class App:
 
     def _on_recording_started(self):
         self._tray.setIcon(_make_tray_icon(color="#ff4444"))
+        self._recorder.start()
         print("Recording started", flush=True)
 
     def _on_recording_stopped(self):
         self._tray.setIcon(_make_tray_icon(color="#ffffff"))
+        self._recorder.stop()
         print("Recording stopped", flush=True)
 
+    def _on_recording_finished(self, audio):
+        print(f"Recording finished: shape={audio.shape}, dtype={audio.dtype}", flush=True)
+
+    def _on_recording_error(self, msg: str):
+        self._tray.setIcon(_make_tray_icon(color="#ffffff"))
+        print(f"Recording error: {msg}", flush=True)
+
     def _cleanup(self):
+        self._recorder.stop()
         self._listener.stop()
 
     def run(self) -> int:

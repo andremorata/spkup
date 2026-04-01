@@ -23,7 +23,7 @@
 | --- | --- | --- | --- | --- | --- |
 | 1 | Project setup + core skeleton | Completed (validated) | 2026-04-01 | Requirements install passed; editable install passed after hatchling backend fix; `pytest tests/test_config.py -v` passed (4/4); `python -m spkup` started successfully | Handoff to Phase 2 |
 | 2 | Global hotkey (press-and-hold) | Completed (validated) | 2026-04-01 | `tests/test_hotkey.py` passes (10/10); `python -m spkup` confirmed single start on hold, single stop on release, no flooding | Handoff to Phase 3 |
-| 3 | Audio recording | In progress | 2026-04-01 | Issue: `specs/phase3.issue.md` | Implement tasks 3.1–3.3 |
+| 3 | Audio recording | Completed (validated) | 2026-04-01 | `pytest tests/test_recorder.py` 4/4 passed; full suite 18/18 passed; `from spkup.app import App` imports cleanly; no linter errors in recorder.py, app.py, test_recorder.py | Handoff to Phase 4 |
 | 4 | Transcription engine | Not started | | Issue: `specs/phase4.issue.md` | After Phase 3 validated |
 | 5 | Visual overlay | Not started | | Issue: `specs/phase5.issue.md` | After Phase 4 validated |
 | 6 | Clipboard + full signal wiring | Not started | | Issue: `specs/phase6.issue.md` | After Phase 5 validated |
@@ -43,3 +43,4 @@ To mark a phase as `Completed (validated)`, record:
 
 - 2026-04-01: Phase 1 validated. Requirements install passed; editable install passed after hatchling backend fix; `pytest tests/test_config.py -v` passed (4/4); `python -m spkup` started successfully.
 - 2026-04-01: Phase 2 validated. `tests/test_hotkey.py` passed 10/10; `python -m spkup` confirmed single start/stop per hotkey gesture, no repeat flooding.
+- 2026-04-01: Phase 3 validated. `pytest tests/test_recorder.py` 4/4 passed; full suite 18/18 passed; `from spkup.app import App` imports cleanly; no diagnostics in recorder.py, app.py, or test_recorder.py.
