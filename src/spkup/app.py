@@ -2,11 +2,14 @@ import sys
 
 from PyQt6.QtCore import Qt, QRect, QRectF
 from PyQt6.QtGui import QBrush, QColor, QIcon, QPainter, QPen, QPixmap
-from PyQt6.QtWidgets import QApplication, QMenu, QMessageBox, QSystemTrayIcon
+from PyQt6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
-from spkup.config import load
+from spkup.clipboard import copy_to_clipboard
+from spkup.config import AppConfig, load
 from spkup.hotkey import HotkeyListener
+from spkup.overlay import OverlayState, OverlayWidget
 from spkup.recorder import AudioRecorder
+from spkup.transcriber import Transcriber
 
 
 def _make_tray_icon(size: int = 64, color: str = "#ffffff") -> QIcon:
@@ -37,7 +40,7 @@ def _make_tray_icon(size: int = 64, color: str = "#ffffff") -> QIcon:
     p.setBrush(Qt.BrushStyle.NoBrush)
     arc_margin = int(s * 0.16)
     arc_rect = QRect(arc_margin, int(s * 0.28), s - 2 * arc_margin, s - 2 * arc_margin)
-    p.drawArc(arc_rect, 0 * 16, -180 * 16)   # bottom semicircle
+    p.drawArc(arc_rect, 0 * 16, -180 * 16)
 
     # Vertical stem from arc bottom to base
     stem_x = s / 2
@@ -64,18 +67,29 @@ class App:
         self._app = QApplication.instance() or QApplication(sys.argv)
         self._app.setQuitOnLastWindowClosed(False)
         self._config = load()
+
+        # Core components
         self._recorder = AudioRecorder(max_seconds=self._config.max_recording_seconds)
-        self._recorder.recording_finished.connect(self._on_recording_finished)
+        self._transcriber = Transcriber(self._config)
+        self._overlay = OverlayWidget(self._config.overlay_position)
+
+        # Recorder → transcription pipeline
+        self._recorder.recording_finished.connect(self._transcriber.transcribe)
         self._recorder.recording_error.connect(self._on_recording_error)
 
+        # Transcription outputs
+        self._transcriber.transcription_finished.connect(self._on_transcription_finished)
+        self._transcriber.transcription_error.connect(self._on_transcription_error)
+
+        # Hotkey listener
         self._listener = HotkeyListener(self._config.hotkey)
         self._listener.recording_started.connect(self._on_recording_started)
         self._listener.recording_stopped.connect(self._on_recording_stopped)
+
         self._app.aboutToQuit.connect(self._cleanup)
 
-        icon = _make_tray_icon()
-
-        self._tray = QSystemTrayIcon(icon)
+        # Tray icon & menu
+        self._tray = QSystemTrayIcon(_make_tray_icon())
         self._tray.setToolTip("spkup — Push to Talk")
 
         self._menu = QMenu()
@@ -88,27 +102,101 @@ class App:
         self._tray.show()
         self._listener.start()
 
-    def _on_settings(self):
-        QMessageBox.information(None, "Settings", "Not implemented yet.")
+    # ---------- Settings -----------------------------------------------------
 
-    def _on_recording_started(self):
+    def _on_settings(self) -> None:
+        from spkup.settings_dialog import SettingsDialog
+
+        dlg = SettingsDialog(self._config)
+        dlg.settings_saved.connect(self._on_settings_saved)
+        dlg.exec()
+
+    def _on_settings_saved(self, new_config: AppConfig) -> None:
+        old = self._config
+        self._config = new_config
+
+        # Restart hotkey listener if hotkey changed
+        if old.hotkey != new_config.hotkey:
+            self._listener.stop()
+            self._listener = HotkeyListener(new_config.hotkey)
+            self._listener.recording_started.connect(self._on_recording_started)
+            self._listener.recording_stopped.connect(self._on_recording_stopped)
+            self._listener.start()
+
+        # Reinitialize transcriber if model / device / compute type changed
+        if (
+            old.model_size != new_config.model_size
+            or old.device != new_config.device
+            or old.compute_type != new_config.compute_type
+        ):
+            old_transcriber = self._transcriber
+            self._recorder.recording_finished.disconnect(old_transcriber.transcribe)
+            old_transcriber.transcription_finished.disconnect(
+                self._on_transcription_finished
+            )
+            old_transcriber.transcription_error.disconnect(self._on_transcription_error)
+
+            self._transcriber = Transcriber(new_config)
+            self._recorder.recording_finished.connect(self._transcriber.transcribe)
+            self._transcriber.transcription_finished.connect(
+                self._on_transcription_finished
+            )
+            self._transcriber.transcription_error.connect(self._on_transcription_error)
+
+        # Reposition overlay if corner changed
+        if old.overlay_position != new_config.overlay_position:
+            self._overlay._overlay_position = new_config.overlay_position
+            self._overlay._reposition()
+
+    # ---------- Recording lifecycle ------------------------------------------
+
+    def _on_recording_started(self) -> None:
         self._tray.setIcon(_make_tray_icon(color="#ff4444"))
         self._recorder.start()
-        print("Recording started", flush=True)
+        self._overlay.show_state(OverlayState.RECORDING)
 
-    def _on_recording_stopped(self):
+    def _on_recording_stopped(self) -> None:
         self._tray.setIcon(_make_tray_icon(color="#ffffff"))
         self._recorder.stop()
-        print("Recording stopped", flush=True)
+        self._overlay.show_state(OverlayState.TRANSCRIBING)
 
-    def _on_recording_finished(self, audio):
-        print(f"Recording finished: shape={audio.shape}, dtype={audio.dtype}", flush=True)
-
-    def _on_recording_error(self, msg: str):
+    def _on_recording_error(self, msg: str) -> None:
         self._tray.setIcon(_make_tray_icon(color="#ffffff"))
-        print(f"Recording error: {msg}", flush=True)
+        self._overlay.show_state(OverlayState.HIDDEN)
+        if QSystemTrayIcon.supportsMessages():
+            self._tray.showMessage(
+                "spkup",
+                f"Recording error: {msg}",
+                QSystemTrayIcon.MessageIcon.Warning,
+                3000,
+            )
 
-    def _cleanup(self):
+    # ---------- Transcription output -----------------------------------------
+
+    def _on_transcription_finished(self, text: str) -> None:
+        copy_to_clipboard(text)
+        self._overlay.show_state(OverlayState.DONE)
+        if QSystemTrayIcon.supportsMessages():
+            self._tray.showMessage(
+                "spkup",
+                text[:80],
+                QSystemTrayIcon.MessageIcon.Information,
+                2000,
+            )
+
+    def _on_transcription_error(self, msg: str) -> None:
+        self._overlay.show_state(OverlayState.HIDDEN)
+        if QSystemTrayIcon.supportsMessages():
+            self._tray.showMessage(
+                "spkup",
+                f"Transcription error: {msg}",
+                QSystemTrayIcon.MessageIcon.Warning,
+                3000,
+            )
+
+    # ---------- Lifecycle ----------------------------------------------------
+
+    def _cleanup(self) -> None:
         self._recorder.stop()
         self._listener.stop()
 
