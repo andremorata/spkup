@@ -2,6 +2,8 @@
 
 Push-to-talk speech-to-text for Windows. Hold a hotkey, speak, release — transcribed text lands in your clipboard.
 
+Planned distribution note: once Phase 9 is implemented, GitHub Releases are intended to become the project's distribution channel.
+
 - Global hotkey (configurable, default `Ctrl+Shift+Space`)
 - Local Whisper inference via [faster-whisper](https://github.com/SYSTRAN/faster-whisper) — no cloud, no API key
 - Mixed Portuguese + English support (auto-detect)
@@ -45,6 +47,6 @@ run.bat
 
 | File | Contents |
 |---|---|
-| [specs/project-template.plan.md](specs/project-template.plan.md) | Full project plan: stack, assumptions, all 8 phases |
+| [specs/project.plan.md](specs/project.plan.md) | Full project plan: stack, assumptions, and the full delivery roadmap |
 | [specs/progress.status.md](specs/progress.status.md) | Current phase status and validation evidence |
-| [specs/phase1.issue.md](specs/phase1.issue.md) — [phase8](specs/phase8.issue.md) | Per-phase tasks and acceptance criteria |
+| [specs/phase1.issue.md](specs/phase1.issue.md) — [phase9](specs/phase9.issue.md) | Per-phase tasks and acceptance criteria for the currently tracked delivery phases |

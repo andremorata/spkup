@@ -11,7 +11,7 @@
 - **Problem statement:** Capture voice via a global push-to-talk hotkey, transcribe it locally with a Whisper model, and paste the result into the clipboard — always available from the system tray.
 - **Success definition:** Hold a hotkey → speak → release → transcribed text is in the clipboard within a few seconds, with visual feedback via an on-screen overlay.
 - **Primary users:** Single user (personal tool), Windows 11, RTX 4070 (8 GB VRAM).
-- **Delivery constraints:** No distribution, no CI, no server infrastructure. Local-only.
+- **Delivery constraints:** No server infrastructure. Local-first Windows desktop app. Packaging, CI/CD, versioning, and distribution are planned for Phase 9 and are not implemented yet.
 
 ---
 
@@ -29,6 +29,10 @@
 | Infrastructure | Local only | Confirmed | No cloud, no Docker |
 | Observability | File logging | Confirmed | `%LOCALAPPDATA%/spkup/spkup.log` |
 | Testing | pytest, TDD | Confirmed | Unit tests for core logic, written alongside implementation |
+| Packaging | PyInstaller | Planned | Baseline frozen Windows build for Phase 9; not implemented yet |
+| CI/CD | GitHub Actions | Planned | Phase 9 target for build, test, and release automation; no workflows yet |
+| Versioning | `X.Y.Z` + Git tags `vX.Y.Z` | Planned | Planned release convention for Phase 9; not implemented yet |
+| Distribution | GitHub Releases | Planned | Planned release channel for packaged builds; not configured yet |
 | License | No constraints | Confirmed | Personal tool |
 
 ---
@@ -52,7 +56,7 @@ Hotkey released   → recording_stopped  → Recorder.stop()
 Quick tap         → recording_started  → Recorder stays active in toggle mode
 Hotkey tapped again → recording_stopped → Recorder.stop()
                       → recording_finished(audio) → Overlay(TRANSCRIBING) + Transcriber.transcribe(audio)
-                          → transcription_finished(text) → Clipboard.copy(text) + Overlay(DONE)
+                          → transcription_finished(text) → RecentHistory.push(text) + Clipboard.copy(text) + Overlay(DONE)
 ```
 
 ---
@@ -68,7 +72,8 @@ Hotkey tapped again → recording_stopped → Recorder.stop()
 | 5 | Visual overlay | `specs/phase5.issue.md` |
 | 6 | Clipboard + full signal wiring | `specs/phase6.issue.md` |
 | 7 | Settings dialog | `specs/phase7.issue.md` |
-| 8 | Polish | `specs/phase8.issue.md` |
+| 8 | Polish + recent transcription history | `specs/phase8.issue.md` |
+| 9 | Planned packaging + GitHub CI/CD + versioning + releases | `specs/phase9.issue.md` |
 
 ---
 
@@ -82,6 +87,7 @@ Hotkey tapped again → recording_stopped → Recorder.stop()
 | 2026-04-01 | pynput over `keyboard` lib | Distinct on_press/on_release callbacks; no admin required |
 | 2026-04-01 | QThread for transcription | Never block the UI thread during inference |
 | 2026-04-01 | TDD for core modules | Tests written alongside config, hotkey, recorder, transcriber |
+| 2026-04-01 | Planned Phase 9 release direction | PyInstaller baseline frozen Windows build; GitHub Actions for CI/release automation; version numbers `X.Y.Z` aligned to Git tags `vX.Y.Z`; GitHub Releases as the distribution channel. Planned only, not implemented yet |
 
 ---
 
@@ -109,3 +115,4 @@ Hotkey tapped again → recording_stopped → Recorder.stop()
 - [ ] Phase 6 validated
 - [ ] Phase 7 validated
 - [ ] Phase 8 validated
+- [ ] Phase 9 validated

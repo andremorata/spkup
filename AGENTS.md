@@ -56,7 +56,7 @@ The `specs/` folder is the execution backbone of the project. Agents must treat 
 
 ### Required files in `specs/`
 
-- `project-template.plan.md` or the project-specific plan file:
+- `project.plan.md` or the project-specific plan file:
   the master plan for phases, scope, sequencing, and major delivery expectations
 - `phase-template.issue.md` or the active phase issue files:
   the actionable breakdown for a single phase, milestone, or workstream

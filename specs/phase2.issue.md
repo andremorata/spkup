@@ -1,6 +1,6 @@
 # Phase 2 — Global Hotkey (Press-and-Hold)
 
-> **Reference:** `specs/project-template.plan.md` — Phase 2
+> **Reference:** `specs/project.plan.md` — Phase 2
 > **Depends on:** Phase 1 — Project Setup + Core Skeleton
 > **Unlocks:** Phase 3 — Audio Recording
 
@@ -22,7 +22,7 @@ Implement a global hotkey listener that detects when the configured key combo is
 
 ## Dependencies
 
-- Related docs: `specs/project-template.plan.md` — Key Design Decisions (pynput)
+- Related docs: `specs/project.plan.md` — Key Design Decisions (pynput)
 - Phase 1 validated: `AppConfig.hotkey` field exists and loads correctly
 - `pynput` installed in venv
 

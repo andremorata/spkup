@@ -2,6 +2,7 @@ import logging
 import sys
 import threading
 import winsound
+from typing import cast
 
 from PyQt6.QtCore import Qt, QRect, QRectF, QTimer
 from PyQt6.QtGui import QBrush, QColor, QIcon, QPainter, QPen, QPixmap
@@ -14,6 +15,8 @@ from spkup.hotkey import HotkeyListener
 from spkup.model_manager import is_downloaded
 from spkup.overlay import OverlayState, OverlayWidget
 from spkup.recorder import AudioRecorder
+from spkup.transcription_history import TranscriptionHistory
+from spkup.transcription_history_window import TranscriptionHistoryWindow
 from spkup.transcriber import Transcriber
 
 _log = logging.getLogger(__name__)
@@ -78,7 +81,7 @@ def _make_tray_icon(size: int = 64, color: str = "#ffffff") -> QIcon:
 
 class App:
     def __init__(self):
-        self._app = QApplication.instance() or QApplication(sys.argv)
+        self._app = cast(QApplication, QApplication.instance() or QApplication(sys.argv))
         self._app.setQuitOnLastWindowClosed(False)
 
         is_first_run = not CONFIG_PATH.exists()
@@ -89,6 +92,14 @@ class App:
         self._recorder = AudioRecorder(max_seconds=self._config.max_recording_seconds)
         self._transcriber = Transcriber(self._config)
         self._overlay = OverlayWidget(self._config.overlay_position)
+        self._transcription_history = TranscriptionHistory(max_entries=5)
+        self._transcription_history_window = TranscriptionHistoryWindow()
+        self._transcription_history_window.delete_requested.connect(
+            self._delete_transcription_history_entry
+        )
+        self._transcription_history_window.copy_requested.connect(
+            self._on_transcription_history_copy_requested
+        )
 
         # Recorder → transcription pipeline
         self._recorder.recording_finished.connect(self._transcriber.transcribe)
@@ -111,14 +122,21 @@ class App:
 
         self._menu = QMenu()
         settings_action = self._menu.addAction("Settings")
+        assert settings_action is not None
         settings_action.triggered.connect(self._on_settings)
         self._menu.addSeparator()
         self._autostart_action = self._menu.addAction("Start on login")
+        assert self._autostart_action is not None
         self._autostart_action.setCheckable(True)
         self._autostart_action.setChecked(is_autostart_enabled())
         self._autostart_action.triggered.connect(self._on_autostart_toggled)
         self._menu.addSeparator()
+        history_action = self._menu.addAction("Recent transcriptions")
+        assert history_action is not None
+        history_action.triggered.connect(self._show_transcription_history)
+        self._menu.addSeparator()
         quit_action = self._menu.addAction("Quit")
+        assert quit_action is not None
         quit_action.triggered.connect(QApplication.quit)
 
         self._tray.setContextMenu(self._menu)
@@ -237,9 +255,34 @@ class App:
 
     # ---------- Transcription output -----------------------------------------
 
+    def _show_transcription_history(self) -> None:
+        entries = self._transcription_history.list_entries()
+        _log.info("Opening transcription history (%d entries)", len(entries))
+        self._transcription_history_window.set_entries(entries)
+        self._transcription_history_window.show_window()
+
+    def _delete_transcription_history_entry(self, entry_id: str) -> None:
+        deleted = self._transcription_history.delete(entry_id)
+        _log.info(
+            "Deleted transcription history entry id=%s deleted=%s",
+            entry_id,
+            deleted,
+        )
+        self._transcription_history_window.set_entries(
+            self._transcription_history.list_entries()
+        )
+
+    def _on_transcription_history_copy_requested(self, text: str) -> None:
+        _log.debug("Copied transcription history entry: %d chars", len(text))
+
     def _on_transcription_finished(self, text: str) -> None:
         _log.info("Transcription finished: %d chars", len(text))
         copy_to_clipboard(text)
+        entry = self._transcription_history.add(text)
+        _log.info("Added transcription history entry id=%s", entry.id)
+        self._transcription_history_window.set_entries(
+            self._transcription_history.list_entries()
+        )
         self._overlay.show_state(OverlayState.DONE)
         threading.Thread(
             target=lambda: (winsound.Beep(880, 55), winsound.Beep(1108, 90)),

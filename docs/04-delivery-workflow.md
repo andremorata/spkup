@@ -8,6 +8,7 @@
 
 - One phase at a time. Do not start Phase N+1 until Phase N is validated.
 - Every phase has an issue file in `specs/` that defines tasks and acceptance criteria before implementation begins.
+- Local validation remains required for every phase on the developer machine.
 - A phase is not done when code is written — it is done when acceptance criteria are verified and `progress.status.md` reflects that.
 
 ---
@@ -25,9 +26,9 @@
 
 **In progress:** Implementation underway. Issue file tasks are being ticked off.
 
-**Completed (declared):** All tasks done; tests written and passing; manual checks performed.
+**Completed (declared):** All tasks done; required local checks performed.
 
-**Completed (validated):** All acceptance criteria explicitly verified; evidence recorded in `progress.status.md`.
+**Completed (validated):** All acceptance criteria explicitly verified; evidence recorded in `progress.status.md` from automated checks and/or manual validation, depending on the phase.
 
 ---
 
@@ -45,14 +46,14 @@
 Before declaring a phase complete:
 
 - [ ] All issue file tasks are ticked
-- [ ] All unit tests for this phase pass (`pytest` exits 0)
-- [ ] All manual checks from the issue file have been performed visually
+- [ ] All required local automated checks for this phase pass (`pytest` exits 0 today; automated pipeline evidence applies once implemented for the relevant phase)
+- [ ] All required manual checks from the issue file have been performed locally
 - [ ] All acceptance criteria in the issue file's AC table are met
 - [ ] No stub print statements or placeholder slots remain in the code
 
 Update `progress.status.md`:
 - Set status to `Completed (validated)`
-- Record evidence (test output, manual observation notes)
+- Record evidence (automated output and/or manual observation notes)
 - Set the next phase as the new active phase
 
 ---
@@ -69,11 +70,12 @@ Update `progress.status.md`:
 | 6 | `specs/phase6.issue.md` | Clipboard + full signal wiring |
 | 7 | `specs/phase7.issue.md` | Settings dialog + in-app model download |
 | 8 | `specs/phase8.issue.md` | Logging, error handling, auto-start, first-run |
+| 9 | `specs/phase9.issue.md` | Planned packaging, CI/release automation, versioning, distribution |
 
 ---
 
-## 6. No CI/CD
+## 6. Local Validation and Planned Automation
 
-spkup is a personal tool. There is no automated pipeline. Validation is always manual, local, on the developer's machine.
+Today, validation is performed locally on the developer machine. That includes running the required tests and completing any manual checks defined by the active phase issue.
 
-The workflow above replaces CI gate discipline: it enforces the same rigor (tests must pass, criteria must be met) without automation.
+Phase 9 is planned to add packaging plus CI/release automation so the same checks can run repeatably in an automated pipeline. That automation does not exist yet, so this workflow still treats local validation as the source of truth for current phases.

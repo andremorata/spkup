@@ -8,7 +8,7 @@
 
 Before doing any substantial work, read:
 
-1. `specs/project-template.plan.md` — confirmed stack, assumptions, phase map
+1. `specs/project.plan.md` — confirmed stack, assumptions, phase map
 2. The active phase issue file (`specs/phaseN.issue.md`) — tasks and acceptance criteria
 3. `specs/progress.status.md` — current phase status and what's validated
 4. `docs/01-architecture.md` — component diagram, threading model, module responsibilities
@@ -63,7 +63,7 @@ Ask before:
 
 | What changed | Always update |
 | --- | --- |
-| Config schema | `docs/01-architecture.md` §6, `specs/project-template.plan.md` Working Assumptions |
+| Config schema | `docs/01-architecture.md` §6, `specs/project.plan.md` Working Assumptions |
 | New module added | `docs/01-architecture.md` Module Responsibilities table + Repository Layout |
 | Threading boundary changed | `docs/01-architecture.md` §5 Threading Model |
 | New architectural decision | `docs/01-architecture.md` §7 Architectural Decisions |

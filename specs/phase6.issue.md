@@ -1,6 +1,6 @@
 # Phase 6 — Clipboard + Full Signal Wiring
 
-> **Reference:** `specs/project-template.plan.md` — Phase 6
+> **Reference:** `specs/project.plan.md` — Phase 6
 > **Depends on:** Phase 5 — Visual Overlay
 > **Unlocks:** Phase 7 — Settings Dialog
 

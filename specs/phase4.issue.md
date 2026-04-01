@@ -1,6 +1,6 @@
 # Phase 4 — Transcription Engine
 
-> **Reference:** `specs/project-template.plan.md` — Phase 4
+> **Reference:** `specs/project.plan.md` — Phase 4
 > **Depends on:** Phase 3 — Audio Recording
 > **Unlocks:** Phase 5 — Visual Overlay
 
@@ -22,7 +22,7 @@ Implement a transcription worker that accepts a float32 numpy audio array, runs 
 
 ## Dependencies
 
-- Related docs: `specs/project-template.plan.md` — Working Assumptions, Key Design Decisions
+- Related docs: `specs/project.plan.md` — Working Assumptions, Key Design Decisions
 - Phase 3 validated: `recording_finished(np.ndarray)` signal exists
 - `faster-whisper` installed in venv; CUDA driver present on host
 

@@ -1,6 +1,6 @@
 # Phase 7 — Settings Dialog
 
-> **Reference:** `specs/project-template.plan.md` — Phase 7
+> **Reference:** `specs/project.plan.md` — Phase 7
 > **Depends on:** Phase 6 — Clipboard + Full Signal Wiring
 > **Unlocks:** Phase 8 — Polish
 

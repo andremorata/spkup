@@ -1,6 +1,6 @@
 # Phase 3 — Audio Recording
 
-> **Reference:** `specs/project-template.plan.md` — Phase 3
+> **Reference:** `specs/project.plan.md` — Phase 3
 > **Depends on:** Phase 2 — Global Hotkey
 > **Unlocks:** Phase 4 — Transcription Engine
 
@@ -22,7 +22,7 @@ Implement an `AudioRecorder` that starts capturing microphone audio when told to
 
 ## Dependencies
 
-- Related docs: `specs/project-template.plan.md` — Working Assumptions (no WAV files)
+- Related docs: `specs/project.plan.md` — Working Assumptions (no WAV files)
 - Phase 2 validated: `recording_started` / `recording_stopped` signals exist
 - `sounddevice` and `numpy` installed in venv
 

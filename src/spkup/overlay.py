@@ -18,8 +18,8 @@ class OverlayState(Enum):
 
 _STATE_COLORS: dict[OverlayState, str] = {
     OverlayState.RECORDING: "#A11E1B",
-    OverlayState.TRANSCRIBING: "#FFB963",
-    OverlayState.DONE: "#A2FFA7",
+    OverlayState.TRANSCRIBING: "#FB8A00",
+    OverlayState.DONE: "#0EE367",
 }
 
 _STATE_LABELS: dict[OverlayState, str] = {
@@ -50,7 +50,7 @@ class OverlayWidget(QWidget):
             | Qt.WindowType.WindowTransparentForInput
         )
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
-        self.setFixedSize(260, 44)
+        self.setFixedSize(100, 34)
 
         self._hide_timer = QTimer()
         self._hide_timer.setSingleShot(True)

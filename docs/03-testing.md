@@ -6,12 +6,12 @@
 
 ## 1. Philosophy
 
-spkup has no CI pipeline and no deployment process. The test suite exists for two reasons:
+Validation is currently local. CI is not implemented yet, but Phase 9 will add repeatable automated checks in CI for the parts of the application that are practical to verify outside a Windows desktop session. The test suite exists for two reasons:
 
 1. **Prevent regressions** — core logic is easy to break silently; tests catch that instantly.
 2. **Drive design** — writing tests first for pure logic (parsing, config, state machines) produces cleaner interfaces.
 
-Testing effort is proportional to testability. Pure logic gets unit tests. Hardware-dependent or Qt-dependent code gets manual verification.
+Testing effort is proportional to testability. Pure logic gets automated tests that currently run locally and are intended to run in CI once Phase 9 lands. Hardware-dependent or Qt-dependent code gets manual verification on the target Windows machine.
 
 ---
 
@@ -44,25 +44,39 @@ pytest
 | `model_manager.py` | `tests/test_model_manager.py` | Cache dir creation, path construction, `is_downloaded` with mock filesystem |
 | `clipboard.py` | `tests/test_clipboard.py` | `setText` called with correct string (mock `QApplication.clipboard()`) |
 | `autostart.py` | `tests/test_autostart.py` | Enable/disable/query with mocked `winreg` |
+| `transcription_history.py` | `tests/test_transcription_history.py` | Add/list ordering, keep only last 5 entries, delete behavior, Unicode text, duplicate entries remain distinct |
+
+These are the checks that are suitable for repeatable automated execution. Today they are run locally with `pytest`; Phase 9 is planned to run the same class of checks in CI.
 
 ---
 
-## 4. What Gets Manual Verification Only
+## 4. What CI Can Cover
+
+CI is not in place yet, but the intended CI scope is the automated checks above:
+
+- Pure Python unit tests under `tests/`
+- Mocked behavior for config, hotkey parsing, recorder lifecycle, model path management, clipboard integration, Windows autostart registry calls, and transcription history rules
+- Regression tests for defects that can be reproduced without a live Qt desktop session, real audio devices, or GPU execution
+
+---
+
+## 5. What Still Requires Manual Validation
 
 These modules involve Qt widget painting, hardware I/O, or CUDA inference — none of which are practical to unit test:
 
 | Module | Manual check |
 | --- | --- |
 | `overlay.py` | Visual inspection: three states show correct colours and labels; auto-hides after DONE |
-| `app.py` (tray) | Tray icon appears; right-click shows menu; Quit exits |
+| `app.py` (tray) | Tray icon appears; right-click shows menu; **Recent transcriptions** opens the history window; Quit exits |
 | `hotkey.py` (listener) | Hold hotkey emits started once; release emits stopped; no flooding |
 | `recorder.py` (stream) | Hold hotkey, speak, release → non-empty array shape printed to stdout |
 | `transcriber.py` | Audio captured → text transcribed correctly in PT and EN |
 | `settings_dialog.py` | Dialog opens; hotkey capture works; save writes to `config.json` |
+| `transcription_history_window.py` | Window shows newest-first session entries; copy/delete act on the selected entry; close/reopen preserves session history while the app stays running |
 
 ---
 
-## 5. TDD Rules
+## 6. TDD Rules
 
 These apply to every module in the "unit tests" table above:
 
@@ -72,7 +86,7 @@ These apply to every module in the "unit tests" table above:
 
 ---
 
-## 6. Mocking Conventions
+## 7. Mocking Conventions
 
 - Use `unittest.mock.patch` for filesystem operations (`pathlib.Path.open`, `os.replace`)
 - Use `unittest.mock.MagicMock` for `sounddevice.InputStream` and `winreg` calls
@@ -80,10 +94,11 @@ These apply to every module in the "unit tests" table above:
 
 ---
 
-## 7. Acceptance Criteria by Phase
+## 8. Acceptance Criteria by Phase
 
 Each phase issue file (`specs/phaseN.issue.md`) lists specific acceptance criteria. A phase is `Completed (validated)` when:
 
 - All unit tests in scope pass (`pytest` exits 0)
+- Automated checks in scope have been run locally; once Phase 9 lands, the same checks should also pass in CI
 - All manual checks described in the issue pass
 - `specs/progress.status.md` is updated with evidence

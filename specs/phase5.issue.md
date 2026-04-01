@@ -1,6 +1,6 @@
 # Phase 5 — Visual Overlay
 
-> **Reference:** `specs/project-template.plan.md` — Phase 5
+> **Reference:** `specs/project.plan.md` — Phase 5
 > **Depends on:** Phase 4 — Transcription Engine
 > **Unlocks:** Phase 6 — Clipboard + Full Signal Wiring
 
@@ -21,7 +21,7 @@ Implement a frameless, always-on-top, click-through overlay widget that displays
 
 ## Dependencies
 
-- Related docs: `specs/project-template.plan.md` — Phase 5 description
+- Related docs: `specs/project.plan.md` — Phase 5 description
 - Phase 4 validated: `transcription_finished` signal exists
 - `PyQt6` installed
 

@@ -31,7 +31,10 @@ flowchart TD
     TW -- faster-whisper\nCUDA --> ML[(Model\n%LOCALAPPDATA%)]
     TW -- transcription_finished --> TR
     TR --> App
+    App -- add/list/delete --> RH[TranscriptionHistory\nsession memory]
+    App -- set_entries/show --> HW[TranscriptionHistoryWindow\nnon-modal QDialog]
     App -- setText --> CB[Clipboard\nQApplication]
+    HW -- copy selected --> CB
     App -- show_state --> OV[OverlayWidget\nframeless QWidget]
     App -- showMessage --> TI[System Tray\nQSystemTrayIcon]
     App -- load / save --> CFG[AppConfig\nconfig.json]
@@ -53,6 +56,9 @@ flowchart TD
 | `clipboard.py` | `copy_to_clipboard` | `QApplication.clipboard().setText()` — Unicode-safe |
 | `app.py` | `App` | `QApplication` + `QSystemTrayIcon`; instantiates all components; wires all signals |
 | `settings_dialog.py` | `SettingsDialog` | Hotkey capture, model picker, device selector, overlay position; reinitializes components on save |
+| `transcription_history.py` | `TranscriptionHistory` | Session-scoped in-memory store of the last 5 completed transcriptions |
+| `transcription_history.py` | `TranscriptionHistoryEntry` | Immutable history item with stable session-local id and text |
+| `transcription_history_window.py` | `TranscriptionHistoryWindow` | Non-modal recent-history window; previews entries and emits copy/delete requests |
 | `autostart.py` | functions | `winreg` HKCU Run key management |
 | `logging_setup.py` | `configure_logging` | Rotating file handler + stderr handler |
 | `__main__.py` | `main` | Entry point: configure logging, create `App`, call `run()` |
@@ -77,12 +83,29 @@ AudioRecorder.recording_finished(audio: np.ndarray)
 
 Transcriber.transcription_finished(text: str)
   → copy_to_clipboard(text)
+  → TranscriptionHistory.add(text)
+  → TranscriptionHistoryWindow.set_entries(current list)
   → OverlayWidget.show_state(DONE)         # auto-hides after 1.5 s
   → QSystemTrayIcon.showMessage(preview)
 
 Transcriber.transcription_error(msg: str)  # or AudioRecorder.recording_error
   → OverlayWidget.show_state(HIDDEN)
   → QSystemTrayIcon.showMessage(error msg)
+
+Tray action "Recent transcriptions"
+  → App._show_transcription_history()
+    → TranscriptionHistory.list_entries()
+    → TranscriptionHistoryWindow.set_entries(entries)
+    → TranscriptionHistoryWindow.show_window()
+
+History window delete
+  → delete_requested(entry_id)
+    → TranscriptionHistory.delete(entry_id)
+    → TranscriptionHistoryWindow.set_entries(updated list)
+
+History window copy
+  → QApplication.clipboard().setText(entry.text)
+  → copy_requested(text)                   # logging/telemetry hook in App
 ```
 
 ---
@@ -147,6 +170,8 @@ e:\spkup\
     clipboard.py
     model_manager.py
     settings_dialog.py
+    transcription_history.py
+    transcription_history_window.py
     autostart.py
     logging_setup.py
     resources/
@@ -158,6 +183,7 @@ e:\spkup\
     test_model_manager.py
     test_clipboard.py
     test_autostart.py
+    test_transcription_history.py
   docs/
   specs/
 ```
