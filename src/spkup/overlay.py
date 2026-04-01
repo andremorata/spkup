@@ -23,8 +23,8 @@ _STATE_COLORS: dict[OverlayState, str] = {
 }
 
 _STATE_LABELS: dict[OverlayState, str] = {
-    OverlayState.RECORDING: "● REC",
-    OverlayState.TRANSCRIBING: "… thinking",
+    OverlayState.RECORDING: "● Recording",
+    OverlayState.TRANSCRIBING: "… Processing",
     OverlayState.DONE: "✓",
 }
 
@@ -49,7 +49,6 @@ class OverlayWidget(QWidget):
             | Qt.WindowType.Tool
             | Qt.WindowType.WindowTransparentForInput
         )
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
         self.setFixedSize(148, 44)
 
@@ -121,10 +120,9 @@ class OverlayWidget(QWidget):
         p.setOpacity(self._pill_opacity_val)
 
         bg = QColor(color_hex)
-        bg.setAlpha(220)
         p.setBrush(bg)
         p.setPen(Qt.PenStyle.NoPen)
-        p.drawRoundedRect(self.rect().adjusted(2, 2, -2, -2), 12, 12)
+        p.drawRect(self.rect())
 
         p.setPen(QColor("#ffffff"))
         font = QFont("Segoe UI", 10, QFont.Weight.Bold)

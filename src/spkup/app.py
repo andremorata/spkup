@@ -245,13 +245,6 @@ class App:
             target=lambda: (winsound.Beep(880, 55), winsound.Beep(1108, 90)),
             daemon=True,
         ).start()
-        if QSystemTrayIcon.supportsMessages():
-            self._tray.showMessage(
-                "spkup",
-                text[:80],
-                QSystemTrayIcon.MessageIcon.Information,
-                2000,
-            )
 
     def _on_transcription_error(self, msg: str) -> None:
         _log.error("Transcription error: %s", msg)
