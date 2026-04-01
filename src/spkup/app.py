@@ -1,11 +1,61 @@
 import sys
-from pathlib import Path
 
-from PyQt6.QtGui import QIcon
+from PyQt6.QtCore import Qt, QRect, QRectF
+from PyQt6.QtGui import QBrush, QColor, QIcon, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import QApplication, QMenu, QMessageBox, QSystemTrayIcon
 
 from spkup.config import load
 from spkup.hotkey import HotkeyListener
+
+
+def _make_tray_icon(size: int = 64, color: str = "#ffffff") -> QIcon:
+    """Draw a microphone icon at the given size using QPainter."""
+    px = QPixmap(size, size)
+    px.fill(Qt.GlobalColor.transparent)
+
+    p = QPainter(px)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+    c = QColor(color)
+    p.setBrush(QBrush(c))
+    p.setPen(Qt.PenStyle.NoPen)
+
+    s = size
+    # Mic capsule body (rounded rect, upper-centre)
+    cap_w = s * 0.36
+    cap_h = s * 0.46
+    cap_x = (s - cap_w) / 2
+    cap_y = s * 0.04
+    p.drawRoundedRect(QRectF(cap_x, cap_y, cap_w, cap_h), cap_w / 2, cap_w / 2)
+
+    # Arc stand — drawn as a thick pen arc
+    pen = QPen(c)
+    pen.setWidthF(s * 0.09)
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+    p.setPen(pen)
+    p.setBrush(Qt.BrushStyle.NoBrush)
+    arc_margin = int(s * 0.16)
+    arc_rect = QRect(arc_margin, int(s * 0.28), s - 2 * arc_margin, s - 2 * arc_margin)
+    p.drawArc(arc_rect, 0 * 16, -180 * 16)   # bottom semicircle
+
+    # Vertical stem from arc bottom to base
+    stem_x = s / 2
+    stem_top = arc_rect.center().y() + arc_rect.height() / 2
+    stem_bot = s * 0.88
+    p.drawLine(int(stem_x), int(stem_top), int(stem_x), int(stem_bot))
+
+    # Horizontal base
+    base_w = s * 0.44
+    base_x = (s - base_w) / 2
+    base_y = s * 0.88
+    pen2 = QPen(c)
+    pen2.setWidthF(s * 0.09)
+    pen2.setCapStyle(Qt.PenCapStyle.RoundCap)
+    p.setPen(pen2)
+    p.drawLine(int(base_x), int(base_y), int(base_x + base_w), int(base_y))
+
+    p.end()
+    return QIcon(px)
 
 
 class App:
@@ -18,8 +68,7 @@ class App:
         self._listener.recording_stopped.connect(self._on_recording_stopped)
         self._app.aboutToQuit.connect(self._cleanup)
 
-        icon_path = Path(__file__).parent / "resources" / "tray.png"
-        icon = QIcon(str(icon_path))
+        icon = _make_tray_icon()
 
         self._tray = QSystemTrayIcon(icon)
         self._tray.setToolTip("spkup — Push to Talk")
@@ -38,9 +87,11 @@ class App:
         QMessageBox.information(None, "Settings", "Not implemented yet.")
 
     def _on_recording_started(self):
+        self._tray.setIcon(_make_tray_icon(color="#ff4444"))
         print("Recording started", flush=True)
 
     def _on_recording_stopped(self):
+        self._tray.setIcon(_make_tray_icon(color="#ffffff"))
         print("Recording stopped", flush=True)
 
     def _cleanup(self):
