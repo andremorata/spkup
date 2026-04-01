@@ -28,6 +28,17 @@ Harden the application for daily use: structured file logging, graceful error re
 
 ## Tasks
 
+### Task 8.0 — Toggle recording hotkey mode
+
+**Deliverable:** Updated `src/spkup/hotkey.py`
+
+- [ ] Preserve existing hold-to-record behavior
+- [ ] Add quick-tap toggle mode: press + release within 300 ms keeps recording active
+- [ ] Add second full hotkey tap to stop recording while toggle mode is active
+- [ ] Extend `tests/test_hotkey.py` to cover hold and toggle paths
+
+**Acceptance criterion:** `pytest tests/ -v` passes and manual hotkey use supports both hold and quick-tap toggle flows. (AC-8.0)
+
 ### Task 8.1 — Structured logging
 
 **Deliverable:** `src/spkup/logging_setup.py`

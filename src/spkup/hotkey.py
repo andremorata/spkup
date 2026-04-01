@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 from threading import Lock
 
 from PyQt6.QtCore import QMetaObject, QObject, Qt, pyqtSignal, pyqtSlot
@@ -52,6 +54,7 @@ def parse_hotkey(hotkey_str: str) -> tuple[set[str], str]:
 class HotkeyListener(QObject):
     recording_started = pyqtSignal()
     recording_stopped = pyqtSignal()
+    _TAP_THRESHOLD = 0.3
 
     def __init__(self, hotkey_str: str):
         super().__init__()
@@ -60,6 +63,8 @@ class HotkeyListener(QObject):
         self._trigger = trigger
         self._pressed_keys: set[str] = set()
         self._is_active = False
+        self._toggle_mode = False
+        self._press_time: float = 0.0
         self._listener: keyboard.Listener | None = None
         self._state_lock = Lock()
 
@@ -70,6 +75,8 @@ class HotkeyListener(QObject):
 
             self._pressed_keys.clear()
             self._is_active = False
+            self._toggle_mode = False
+            self._press_time = 0.0
             self._listener = keyboard.Listener(
                 on_press=self._on_press,
                 on_release=self._on_release,
@@ -82,6 +89,8 @@ class HotkeyListener(QObject):
             self._listener = None
             self._pressed_keys.clear()
             self._is_active = False
+            self._toggle_mode = False
+            self._press_time = 0.0
 
         if listener is not None:
             listener.stop()
@@ -92,17 +101,31 @@ class HotkeyListener(QObject):
             return
 
         should_emit_started = False
+        should_emit_stopped = False
         with self._state_lock:
             self._pressed_keys.add(key_name)
             required_keys = self._modifiers | {self._trigger}
-            if not self._is_active and required_keys.issubset(self._pressed_keys):
+
+            if self._is_active and self._toggle_mode and required_keys.issubset(self._pressed_keys):
+                self._is_active = False
+                self._toggle_mode = False
+                should_emit_stopped = True
+            elif not self._is_active and required_keys.issubset(self._pressed_keys):
                 self._is_active = True
+                self._toggle_mode = False
+                self._press_time = time.monotonic()
                 should_emit_started = True
 
         if should_emit_started:
             QMetaObject.invokeMethod(
                 self,
                 "_emit_started",
+                Qt.ConnectionType.QueuedConnection,
+            )
+        if should_emit_stopped:
+            QMetaObject.invokeMethod(
+                self,
+                "_emit_stopped",
                 Qt.ConnectionType.QueuedConnection,
             )
 
@@ -113,9 +136,13 @@ class HotkeyListener(QObject):
 
         should_emit_stopped = False
         with self._state_lock:
-            if key_name == self._trigger and self._is_active:
-                self._is_active = False
-                should_emit_stopped = True
+            if key_name == self._trigger and self._is_active and not self._toggle_mode:
+                elapsed = time.monotonic() - self._press_time
+                if elapsed < self._TAP_THRESHOLD:
+                    self._toggle_mode = True
+                else:
+                    self._is_active = False
+                    should_emit_stopped = True
 
             self._pressed_keys.discard(key_name)
 

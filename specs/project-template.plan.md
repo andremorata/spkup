@@ -49,8 +49,10 @@
 ```
 Hotkey held       → recording_started  → Overlay(RECORDING) + Recorder.start()
 Hotkey released   → recording_stopped  → Recorder.stop()
-                     → recording_finished(audio) → Overlay(TRANSCRIBING) + Transcriber.transcribe(audio)
-                         → transcription_finished(text) → Clipboard.copy(text) + Overlay(DONE)
+Quick tap         → recording_started  → Recorder stays active in toggle mode
+Hotkey tapped again → recording_stopped → Recorder.stop()
+                      → recording_finished(audio) → Overlay(TRANSCRIBING) + Transcriber.transcribe(audio)
+                          → transcription_finished(text) → Clipboard.copy(text) + Overlay(DONE)
 ```
 
 ---
