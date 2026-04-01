@@ -74,3 +74,12 @@ Desktop.ini
 worktrees/
 
 .claude/
+
+# ========================================
+# Python
+# ========================================
+__pycache__/
+.venv/
+*.egg-info/
+dist/
+build/

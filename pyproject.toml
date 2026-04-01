@@ -1,0 +1,21 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "spkup"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "PyQt6>=6.6",
+    "faster-whisper>=1.0",
+    "sounddevice>=0.4",
+    "pynput>=1.7",
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/spkup"]
