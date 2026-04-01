@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import logging
+
 import numpy as np
 import sounddevice
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal
+
+_log = logging.getLogger(__name__)
 
 
 class AudioRecorder(QObject):
@@ -35,7 +39,13 @@ class AudioRecorder(QObject):
             )
             self._stream.start()
             self._timer.start(self._max_seconds * 1000)
+            _log.debug("Recording started on device %s", self._device)
+        except sounddevice.PortAudioError as exc:
+            _log.error("PortAudio error opening microphone: %s", exc)
+            self.recording_error.emit(f"Could not open microphone: {exc}")
+            self._stream = None
         except Exception as exc:
+            _log.error("Unexpected error opening microphone: %s", exc)
             self.recording_error.emit(str(exc))
             self._stream = None
 
@@ -57,6 +67,7 @@ class AudioRecorder(QObject):
             audio = np.array([], dtype=np.float32)
 
         self.recording_finished.emit(audio)
+        _log.debug("Recording finished: %d samples", len(audio))
 
     def _on_safety_timeout(self):
         self.stop()

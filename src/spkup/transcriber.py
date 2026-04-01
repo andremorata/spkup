@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import logging
+
 import numpy as np
 from PyQt6.QtCore import QObject, QThread, pyqtSignal
 
 from spkup.config import AppConfig
 from spkup.model_manager import ModelNotFoundError, is_downloaded, model_path
+
+_log = logging.getLogger(__name__)
 
 
 class _TranscriptionWorker(QThread):
@@ -28,30 +32,42 @@ class _TranscriptionWorker(QThread):
 
     def run(self) -> None:
         try:
-            if not is_downloaded(self._model_size):
-                raise ModelNotFoundError(
-                    f"Model '{self._model_size}' is not downloaded. "
-                    "Open Settings to download it."
-                )
-
-            from faster_whisper import WhisperModel
-
-            mp = str(model_path(self._model_size))
-            model = WhisperModel(
-                mp,
-                device=self._device,
-                compute_type=self._compute_type,
-            )
-            segments, _ = model.transcribe(
-                self._audio,
-                language=None,
-                vad_filter=True,
-                beam_size=5,
-            )
-            text = " ".join(seg.text for seg in segments).strip()
+            text = self._run_transcription()
             self.finished.emit(text)
         except Exception as exc:
+            _log.error("Transcription error: %s", exc)
             self.error.emit(str(exc))
+
+    def _run_transcription(self) -> str:
+        if not is_downloaded(self._model_size):
+            raise ModelNotFoundError(
+                f"Model '{self._model_size}' is not downloaded. "
+                "Open Settings to download it."
+            )
+
+        from faster_whisper import WhisperModel
+
+        mp = str(model_path(self._model_size))
+
+        try:
+            model = WhisperModel(
+                mp, device=self._device, compute_type=self._compute_type
+            )
+            return self._transcribe_with(model)
+        except Exception as exc:
+            if "out of memory" in str(exc).lower() and self._device != "cpu":
+                _log.warning(
+                    "CUDA out-of-memory; falling back to CPU/int8: %s", exc
+                )
+                cpu_model = WhisperModel(mp, device="cpu", compute_type="int8")
+                return self._transcribe_with(cpu_model)
+            raise
+
+    def _transcribe_with(self, model) -> str:
+        segments, _ = model.transcribe(
+            self._audio, language=None, vad_filter=True, beam_size=5
+        )
+        return " ".join(seg.text for seg in segments).strip()
 
 
 class Transcriber(QObject):

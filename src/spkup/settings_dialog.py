@@ -137,7 +137,7 @@ class SettingsDialog(QDialog):
 
     settings_saved = pyqtSignal(object)  # AppConfig
 
-    def __init__(self, config: AppConfig, parent=None) -> None:
+    def __init__(self, config: AppConfig, first_run: bool = False, parent=None) -> None:
         super().__init__(parent)
         self.setWindowTitle("spkup — Settings")
         self.setModal(True)
@@ -150,6 +150,17 @@ class SettingsDialog(QDialog):
 
         main_layout = QVBoxLayout(self)
         main_layout.setSpacing(12)
+
+        if first_run:
+            banner = QLabel(
+                "Welcome to spkup!\n"
+                "Choose a Whisper model below and click Download to get started."
+            )
+            banner.setWordWrap(True)
+            banner.setStyleSheet(
+                "background:#1565C0; color:#ffffff; padding:10px; border-radius:6px;"
+            )
+            main_layout.addWidget(banner)
 
         # ── Hotkey ──────────────────────────────────────────────────────────
         self._hotkey_edit = HotkeyEdit(config.hotkey)

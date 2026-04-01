@@ -28,6 +28,10 @@ def _add_nvidia_dll_dirs() -> None:
 
 _add_nvidia_dll_dirs()
 
+from spkup.logging_setup import configure_logging  # noqa: E402
+
+configure_logging()
+
 from spkup.app import App  # noqa: E402
 
 sys.exit(App().run())
