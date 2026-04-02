@@ -11,6 +11,26 @@ from spkup.model_manager import ModelNotFoundError, is_downloaded, model_path
 _log = logging.getLogger(__name__)
 
 
+def _should_fallback_to_cpu(device: str, exc: Exception) -> bool:
+    if device == "cpu":
+        return False
+
+    message = str(exc).lower()
+    if "out of memory" in message:
+        return True
+
+    runtime_markers = (
+        "cublas",
+        "cudnn",
+        "cudart",
+        "cuda driver",
+        "cuda runtime",
+        "cannot be loaded",
+        "failed to load",
+    )
+    return any(marker in message for marker in runtime_markers)
+
+
 class _TranscriptionWorker(QThread):
     """Transcribes a float32 audio array in a background thread via faster-whisper."""
 
@@ -55,9 +75,10 @@ class _TranscriptionWorker(QThread):
             )
             return self._transcribe_with(model)
         except Exception as exc:
-            if "out of memory" in str(exc).lower() and self._device != "cpu":
+            if _should_fallback_to_cpu(self._device, exc):
                 _log.warning(
-                    "CUDA out-of-memory; falling back to CPU/int8: %s", exc
+                    "CUDA transcription failed; falling back to CPU/int8: %s",
+                    exc,
                 )
                 cpu_model = WhisperModel(mp, device="cpu", compute_type="int8")
                 return self._transcribe_with(cpu_model)

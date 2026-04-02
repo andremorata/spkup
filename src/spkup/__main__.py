@@ -13,6 +13,12 @@ def runtime_dir() -> Path:
     return Path(__file__).resolve().parent
 
 
+def _nvidia_bin_dirs(root: Path) -> list[Path]:
+    if not root.is_dir():
+        return []
+    return [path for path in sorted(root.glob("nvidia/*/bin")) if path.is_dir()]
+
+
 def _dll_search_dirs() -> list[Path]:
     """Return Windows DLL search directories for dev and frozen builds."""
     if sys.platform != "win32":
@@ -21,10 +27,14 @@ def _dll_search_dirs() -> list[Path]:
     candidates: list[Path] = []
 
     if is_frozen_build():
-        candidates.append(runtime_dir())
+        runtime = runtime_dir()
+        candidates.append(runtime)
+        candidates.extend(_nvidia_bin_dirs(runtime))
         bundle_dir = getattr(sys, "_MEIPASS", None)
         if bundle_dir:
-            candidates.append(Path(bundle_dir))
+            bundle_path = Path(bundle_dir)
+            candidates.append(bundle_path)
+            candidates.extend(_nvidia_bin_dirs(bundle_path))
     else:
         for entry in sys.path:
             nvidia_root = Path(entry) / "nvidia"

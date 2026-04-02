@@ -31,12 +31,21 @@ def test_dll_search_dirs_scan_nvidia_bins_in_dev_mode(tmp_path: Path) -> None:
 def test_dll_search_dirs_include_bundle_dirs_in_frozen_mode(tmp_path: Path) -> None:
     runtime = tmp_path / "dist" / "spkup"
     bundle = runtime / "_internal"
+    runtime_cuda_bin = runtime / "nvidia" / "cublas" / "bin"
+    bundle_cuda_bin = bundle / "nvidia" / "cudnn" / "bin"
     runtime.mkdir(parents=True)
     bundle.mkdir(parents=True)
+    runtime_cuda_bin.mkdir(parents=True)
+    bundle_cuda_bin.mkdir(parents=True)
 
     with patch.object(__main__.sys, "platform", "win32"), patch.object(
         __main__.sys, "frozen", True, create=True
     ), patch.object(__main__.sys, "_MEIPASS", str(bundle), create=True), patch.object(
         __main__.sys, "executable", str(runtime / "spkup.exe")
     ):
-        assert __main__._dll_search_dirs() == [runtime.resolve(), bundle.resolve()]
+        assert __main__._dll_search_dirs() == [
+            runtime.resolve(),
+            runtime_cuda_bin.resolve(),
+            bundle.resolve(),
+            bundle_cuda_bin.resolve(),
+        ]
