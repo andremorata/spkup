@@ -41,7 +41,7 @@ Explicit Phase 8 extension:
 - [x] Add second full hotkey tap to stop recording while toggle mode is active
 - [x] Extend `tests/test_hotkey.py` to cover hold and toggle paths
 
-**Acceptance criterion:** Automated coverage is in place and manual validation is complete: `pytest tests/ -v` passes and manual hotkey use supports both hold and quick-tap toggle flows. (AC-8.0)
+**Acceptance criterion:** Automated coverage is in place, but manual validation is still pending: `pytest tests/ -v` passes and manual hotkey use should support both hold and quick-tap toggle flows. (AC-8.0)
 
 ### Task 8.1 — Structured logging
 
@@ -52,7 +52,7 @@ Explicit Phase 8 extension:
 - [x] Call `configure_logging()` at the top of `__main__.py` before anything else
 - [x] Replace any remaining `print()` statements in the codebase with appropriate `logging` calls
 
-**Acceptance criterion:** Implementation is complete and manual runtime validation is complete: `spkup.log` is created after launch and contains startup log entries. (AC-8.1)
+**Acceptance criterion:** Implementation is complete, but manual runtime validation is still pending: `spkup.log` should be created after launch and contain startup log entries. (AC-8.1)
 
 ---
 
@@ -61,11 +61,11 @@ Explicit Phase 8 extension:
 **Deliverable:** Updated `recorder.py`, `transcriber.py`, `app.py`
 
 - [x] `recorder.py`: catch `sounddevice.PortAudioError` in `start()`; emit `recording_error` with human-readable message; log at `ERROR` level
-- [x] `transcriber.py`: catch `torch.cuda.OutOfMemoryError` (and generic `RuntimeError` containing "CUDA out of memory"); log warning; retry transcription with `device="cpu"`, `compute_type="int8"` — emit `transcription_finished` as normal if CPU retry succeeds
+- [ ] `transcriber.py`: catch `torch.cuda.OutOfMemoryError` (and generic `RuntimeError` containing "CUDA out of memory"); log warning; retry transcription with `device="cpu"`, `compute_type="int8"` — emit `transcription_finished` as normal if CPU retry succeeds
 - [x] `app.py`: on `recording_error` or `transcription_error` show tray balloon with message; log at `ERROR`
-- [x] No unhandled exceptions should crash the process silently
+- [ ] No unhandled exceptions should crash the process silently
 
-**Acceptance criterion:** Manual validation is complete for the current implementation: unplug mic → error tray notification appears; CUDA OOM → CPU fallback produces text. (AC-8.2)
+**Acceptance criterion:** Manual validation is still required for the current implementation: unplug mic → error tray notification appears; CUDA OOM → CPU fallback produces text. (AC-8.2)
 
 ---
 
@@ -73,13 +73,13 @@ Explicit Phase 8 extension:
 
 **Deliverable:** `src/spkup/autostart.py`
 
-- [x] `enable_autostart(exe_path: str) -> None`: writes `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run\spkup` with the path to the launcher
+- [ ] `enable_autostart(exe_path: str) -> None`: writes `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run\spkup` with the path to the launcher
 - [x] `disable_autostart() -> None`: deletes the registry key if it exists
 - [x] `is_autostart_enabled() -> bool`: checks if the key exists
 - [x] Tray context menu gains a checkable **Start on login** action that calls these functions
 - [x] Unit tests: `tests/test_autostart.py` — mock `winreg`; test enable/disable/query
 
-**Acceptance criterion:** Automated coverage is in place and manual registry and tray validation are complete: enable → key present in registry; disable → key absent; tray action reflects current state. (AC-8.3)
+**Acceptance criterion:** Automated coverage is in place, but manual registry and tray validation are still pending: enable → key present in registry; disable → key absent; tray action reflects current state. (AC-8.3)
 
 ---
 
@@ -89,9 +89,9 @@ Explicit Phase 8 extension:
 
 - [x] On first launch (config file does not exist yet), open `SettingsDialog` automatically with a welcome banner: "Welcome to spkup. Choose a model and download it to get started."
 - [x] Disable main hotkey listener until a model is confirmed downloaded
-- [x] After successful download, close the first-run dialog and show tray notification: "spkup is ready. Hold [hotkey] to record."
+- [ ] After successful download, close the first-run dialog and show tray notification: "spkup is ready. Hold [hotkey] to record."
 
-**Acceptance criterion:** Manual first-run validation is complete: fresh install (no config.json, no cached model) → dialog opens automatically; after download → hotkey works. (AC-8.4)
+**Acceptance criterion:** Manual first-run validation is still pending: fresh install (no config.json, no cached model) → dialog opens automatically; after download → hotkey works. (AC-8.4)
 
 ---
 
@@ -108,7 +108,7 @@ Explicit Phase 8 extension:
 - [x] Closing or reopening the window preserves the current session history while the app remains running
 - [x] Add unit coverage in `tests/test_transcription_history.py` for ordering, capping, delete, Unicode, and duplicate-entry behavior
 
-**Acceptance criterion:** Implementation is complete, unit coverage exists, and manual verification is complete for tray/window behavior: after 6 successful transcriptions, the recent-history window shows the latest 5 entries only; any entry is copyable or deletable from the window without affecting the remaining entries. (AC-8.5)
+**Acceptance criterion:** Implementation is complete and unit coverage exists, but manual verification is still pending for tray/window behavior: after 6 successful transcriptions, the recent-history window should show the latest 5 entries only; any entry should be copyable or deletable from the window without affecting the remaining entries. (AC-8.5)
 
 ---
 
@@ -116,8 +116,8 @@ Explicit Phase 8 extension:
 
 | ID | Criterion | How To Verify |
 | --- | --- | --- |
-| AC-8.1 | Log file creation and startup entries validated | `%LOCALAPPDATA%/spkup/spkup.log` was created after launch and contains startup log entries |
-| AC-8.2 | Error recovery validated | No-mic and CUDA OOM scenarios were manually validated with tray notification and CPU fallback behavior |
-| AC-8.3 | Auto-start registry key management validated | `tests/test_autostart.py` is covered and manual registry/tray validation confirmed enable, disable, and reflected state |
-| AC-8.4 | First-run dialog and readiness flow validated | Fresh-install first-run behavior was validated, including automatic dialog launch and post-download readiness |
-| AC-8.5 | Recent-history window behavior validated for the last 5 session transcriptions | Recent-history tray/window behavior was manually validated, including capping at 5 entries plus copy and delete actions |
+| AC-8.1 | Log file created with entries | Check `%LOCALAPPDATA%/spkup/spkup.log` after launch |
+| AC-8.2 | Error recovery works | Simulate no-mic and CUDA OOM; observe tray notifications |
+| AC-8.3 | Auto-start registry key managed correctly | `pytest tests/test_autostart.py` + manual registry check |
+| AC-8.4 | First-run dialog opens on fresh install | Delete config and model; relaunch; dialog appears |
+| AC-8.5 | Recent-history window manages the last 5 session transcriptions | Perform 6 transcriptions; open tray action; verify copy and delete actions. Not manually validated in this session. |

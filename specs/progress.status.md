@@ -4,10 +4,10 @@
 
 ## Current Snapshot
 
-- Active phase: Phase 9 — Packaging + release readiness
-- Overall status: Blocked
+- Active phase: Phase 8 — Polish
+- Overall status: In progress
 - Last updated: 2026-04-01
-- Primary risks: packaged Windows app still needs manual primary-flow validation from the frozen build after the 0.1.1 CUDA runtime packaging fix
+- Primary risks: PyQt6 system-tray behaviour differences across Windows builds; CUDA availability for faster-whisper at runtime
 
 ## Status Vocabulary
 
@@ -28,8 +28,8 @@
 | 5 | Visual overlay | Completed (validated) | 2026-04-01 | overlay.py; top-center/bottom-center positions; winsound audio cues; 28/28 passed | Handoff to Phase 6 |
 | 6 | Clipboard + full signal wiring | Completed (validated) | 2026-04-01 | clipboard.py; full recording→transcription→clipboard pipeline wired in app.py; 28/28 passed | Handoff to Phase 7 |
 | 7 | Settings dialog | Completed (validated) | 2026-04-01 | settings_dialog.py; model download worker; hotkey capture widget; overlay position selector; 28/28 passed | Handoff to Phase 8 |
-| 8 | Polish | Completed (validated) | 2026-04-01 | logging_setup.py, autostart.py, test_autostart.py created; recorder/transcriber/app/settings_dialog updated; CUDA OOM fallback; first-run UX; hotkey toggle mode added for quick-tap lock/unlock recording; recent transcription history implemented in app.py, transcription_history.py, and transcription_history_window.py; automated validation already recorded with `.venv\Scripts\python -m pytest tests/ -v` passing 42/42; user-confirmed remaining manual Phase 8 checks passed on 2026-04-01 | Handoff to Phase 9 |
-| 9 | Packaging + release readiness | Blocked | 2026-04-01 | Versioning contract, packaging baseline, CI workflow, and release workflow are implemented. Patch release `0.1.1` fixed the frozen CUDA runtime packaging path by bundling NVIDIA wheel DLLs and falling back to CPU when CUDA libraries cannot load. Validation passed locally (`pytest` 52/52, fresh PyInstaller build succeeded) and on GitHub (CI run `23878398988` passed on `main`; release run `23878489053` published `spkup-0.1.1-windows-x64.zip` to GitHub Release `v0.1.1`). The only remaining validation gap is manual frozen-app primary-flow verification. | Download Release `v0.1.1` and manually verify tray startup, hotkey capture, overlay transitions, transcription, clipboard output, and autostart behavior from the frozen app |
+| 8 | Polish | In progress | 2026-04-01 | logging_setup.py, autostart.py, test_autostart.py created; recorder/transcriber/app/settings_dialog updated; CUDA OOM fallback; first-run UX; hotkey toggle mode added for quick-tap lock/unlock recording; recent transcription history implemented in app.py, transcription_history.py, and transcription_history_window.py; `.venv\Scripts\python -m pytest tests/ -v` passed 42/42; editor diagnostics clean for the new/changed history files; manual tray/window verification still pending | Manually verify recent-history tray/window behavior and remaining Phase 8 acceptance checks before marking validated |
+| 9 | Packaging + release readiness | Blocked | 2026-04-01 | Planned next phase only; blocked until Phase 8 validation is complete | Finish Phase 8 validation, then begin Phase 9 implementation |
 
 ## Validation Notes
 
@@ -52,7 +52,3 @@ To mark a phase as `Completed (validated)`, record:
 - 2026-04-01: Recent transcription history implemented. `transcription_history.py`, `transcription_history_window.py`, and `tests/test_transcription_history.py` added; `app.py` wires tray access plus session-scoped add/delete refresh. In-session full suite passed 42/42 via `.venv\Scripts\python -m pytest tests/ -v`. Editor diagnostics are clean for `app.py`, `transcription_history.py`, `transcription_history_window.py`, and `tests/test_transcription_history.py`. Manual verification of tray/window behavior was not performed in this session, so Phase 8 remains in progress.
 - 2026-04-01: Phase 8 automated validation rerun recorded. `.venv\Scripts\python -m pytest tests/ -v` passed 42/42. No manual validation was performed in this run; Phase 8 remains in progress pending tray/window verification.
 - 2026-04-01: Progress tracker updated to reflect planned Phase 9. Added a blocked Phase 9 row for packaging and release readiness, explicitly gated on Phase 8 validation. This was a planning/spec update only; no Phase 9 implementation or packaging validation was performed.
-- 2026-04-01: Remaining manual Phase 8 validation checks passed. Automated validation had already been recorded with `.venv\Scripts\python -m pytest tests/ -v` passing 42/42, and user-confirmed manual Phase 8 checks now complete; Phase 8 is validated and Phase 9 is unblocked.
-- 2026-04-01: Phase 9 local implementation and local validation are recorded. Versioning contract, packaging baseline, CI workflow, and release workflow are in place locally. Local validation passed with `pytest` 48/48, `py_compile` clean, a successful PyInstaller build, and a sanity review of the workflow files.
-- 2026-04-01: GitHub validation for Phase 9 succeeded. CI run `23877539142` passed on `main` after the metadata-resolution fix, and release run `23877811976` built and published GitHub Release `v0.1.0` with attached asset `spkup-0.1.0-windows-x64.zip`. Phase 9 remains blocked only on manual validation of the frozen Windows app primary flow.
-- 2026-04-01: Patch release `v0.1.1` shipped to fix the frozen CUDA runtime failure reported from `v0.1.0` (`cublas64_12.dll is not found or cannot be loaded`). The fix bundles NVIDIA wheel DLLs into the PyInstaller artifact, adds nested bundled NVIDIA bin directories to the frozen DLL search path, and falls back to CPU/int8 if CUDA libraries cannot load. Local validation passed with `pytest` 52/52 and a fresh `PyInstaller --clean --noconfirm spkup.spec` build. GitHub validation also passed: CI run `23878398988` succeeded on `main`, and release run `23878489053` published `spkup-0.1.1-windows-x64.zip` to GitHub Release `v0.1.1`.
