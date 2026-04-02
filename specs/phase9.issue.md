@@ -87,10 +87,10 @@ Implement the packaging and release automation milestone for `spkup`: establish 
 
 | ID | Criterion | How To Verify | Current Status |
 | --- | --- | --- | --- |
-| AC-9.1 | PyInstaller baseline produces a runnable Windows frozen build | Run the documented packaging command from a clean checkout on Windows; launch the produced artifact and complete the primary transcription flow | Packaging build passes locally and in GitHub Actions; manual frozen-app flow validation is still pending |
-| AC-9.2 | GitHub Actions provides repeatable validation on PR/push | Open a pull request or push a branch change; verify the CI workflow runs tests and packaging-oriented validation successfully | Satisfied: CI run `23877539142` passed on `main` |
+| AC-9.1 | PyInstaller baseline produces a runnable Windows frozen build | Run the documented packaging command from a clean checkout on Windows; launch the produced artifact and complete the primary transcription flow | Packaging build passes locally and in GitHub Actions, including the 0.1.1 CUDA runtime packaging fix; manual frozen-app flow validation is still pending |
+| AC-9.2 | GitHub Actions provides repeatable validation on PR/push | Open a pull request or push a branch change; verify the CI workflow runs tests and packaging-oriented validation successfully | Satisfied: CI runs `23877539142` and `23878398988` passed on `main` |
 | AC-9.3 | Source version, Git tags, and release naming follow one policy | Prepare a candidate release and verify `X.Y.Z` source version maps directly to `vX.Y.Z` tag and artifact naming | Implemented and validated locally |
-| AC-9.4 | GitHub Releases is the automated distribution channel for Windows artifacts | Create a `vX.Y.Z` tag in a test release scenario and verify GitHub Actions publishes the Windows artifact to the matching GitHub Release | Satisfied: release run `23877811976` published `spkup-0.1.0-windows-x64.zip` to GitHub Release `v0.1.0` |
+| AC-9.4 | GitHub Releases is the automated distribution channel for Windows artifacts | Create a `vX.Y.Z` tag in a test release scenario and verify GitHub Actions publishes the Windows artifact to the matching GitHub Release | Satisfied: release runs `23877811976` and `23878489053` published `spkup-0.1.0-windows-x64.zip` and `spkup-0.1.1-windows-x64.zip` to GitHub Releases `v0.1.0` and `v0.1.1` |
 
 ---
 
@@ -108,6 +108,8 @@ Implement the packaging and release automation milestone for `spkup`: establish 
 - 2026-04-01: Local validation passed: `pytest` 48/48, `py_compile` clean, PyInstaller build succeeded, and workflow files were reviewed as sane.
 - 2026-04-01: CI validation succeeded on GitHub. Workflow run `23877539142` passed on `main` after the metadata-resolution fix.
 - 2026-04-01: First automated release succeeded on GitHub. Workflow run `23877811976` published Release `v0.1.0` with asset `spkup-0.1.0-windows-x64.zip`.
+- 2026-04-01: Patch release `v0.1.1` fixed the frozen CUDA runtime failure reported from `v0.1.0` by bundling NVIDIA wheel DLLs into the PyInstaller artifact, extending frozen DLL search paths to nested bundled NVIDIA bin directories, and falling back to CPU/int8 when CUDA libraries cannot load.
+- 2026-04-01: The `v0.1.1` patch was validated locally with `pytest` 52/52 and a fresh `PyInstaller --clean --noconfirm spkup.spec` build, then validated on GitHub with CI run `23878398988` and release run `23878489053`, which published Release `v0.1.1` with asset `spkup-0.1.1-windows-x64.zip`.
 - 2026-04-01: Phase 9 is not complete. The remaining blocker is manual validation of the frozen Windows app primary flow.
 
 ---
