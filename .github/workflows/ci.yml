@@ -44,7 +44,7 @@ jobs:
         id: package_meta
         shell: pwsh
         run: |
-          $version = python -c "import pathlib, re; text = pathlib.Path('src/spkup/__init__.py').read_text(encoding='utf-8'); match = re.search(r'__version__\s*=\s*\"(\d+\.\d+\.\d+)\"', text); assert match, 'Expected __version__ = \"X.Y.Z\" in src/spkup/__init__.py'; print(match.group(1))"
+          $version = python -c "namespace = {}; exec(compile(open('src/spkup/__init__.py', encoding='utf-8').read(), 'src/spkup/__init__.py', 'exec'), namespace); print(namespace['__version__'])"
           "version=$version" >> $env:GITHUB_OUTPUT
           "bundle_dir=spkup-$version-windows-x64" >> $env:GITHUB_OUTPUT
           "archive_name=spkup-$version-windows-x64.zip" >> $env:GITHUB_OUTPUT
