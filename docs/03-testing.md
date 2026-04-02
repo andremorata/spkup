@@ -58,6 +58,8 @@ CI is not in place yet, but the intended CI scope is the automated checks above:
 - Mocked behavior for config, hotkey parsing, recorder lifecycle, model path management, clipboard integration, Windows autostart registry calls, and transcription history rules
 - Regression tests for defects that can be reproduced without a live Qt desktop session, real audio devices, or GPU execution
 
+For release preparation, these same tests remain the required automated baseline before cutting a version. A release candidate is not ready if `pytest` is failing locally, even though CI automation for that gate has not been implemented yet.
+
 ---
 
 ## 5. What Still Requires Manual Validation
@@ -102,3 +104,9 @@ Each phase issue file (`specs/phaseN.issue.md`) lists specific acceptance criter
 - Automated checks in scope have been run locally; once Phase 9 lands, the same checks should also pass in CI
 - All manual checks described in the issue pass
 - `specs/progress.status.md` is updated with evidence
+
+For Phase 9 release work specifically, the minimum local release-validation baseline is:
+
+- `pytest`
+- Manual Windows smoke check of the runnable app build under the current source version
+- Verification that the source version in `src/spkup/__init__.py` matches the intended Git tag `vX.Y.Z`

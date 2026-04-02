@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: '3.12'
+
+jobs:
+  windows-validation:
+    name: Windows Validation
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            requirements.txt
+
+      - name: Install project and build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev,build]"
+
+      - name: Run test suite
+        run: python -m pytest tests/ -v
+
+      - name: Resolve packaging metadata
+        id: package_meta
+        shell: pwsh
+        run: |
+          $version = python -c "import pathlib, re; text = pathlib.Path('src/spkup/__init__.py').read_text(encoding='utf-8'); match = re.search(r'__version__\s*=\s*\"(\d+\.\d+\.\d+)\"', text); assert match, 'Expected __version__ = \"X.Y.Z\" in src/spkup/__init__.py'; print(match.group(1))"
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "bundle_dir=spkup-$version-windows-x64" >> $env:GITHUB_OUTPUT
+          "archive_name=spkup-$version-windows-x64.zip" >> $env:GITHUB_OUTPUT
+
+      - name: Build Windows frozen bundle
+        run: pyinstaller --clean spkup.spec
+
+      - name: Create versioned ZIP artifact
+        shell: pwsh
+        run: |
+          $bundleDir = Join-Path 'dist' '${{ steps.package_meta.outputs.bundle_dir }}'
+          $archivePath = Join-Path 'dist' '${{ steps.package_meta.outputs.archive_name }}'
+
+          if (Test-Path $bundleDir) {
+            Remove-Item $bundleDir -Recurse -Force
+          }
+
+          if (Test-Path $archivePath) {
+            Remove-Item $archivePath -Force
+          }
+
+          Copy-Item 'dist\spkup' $bundleDir -Recurse
+          Compress-Archive -Path $bundleDir -DestinationPath $archivePath
+
+      - name: Upload Windows frozen build artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-frozen-build-${{ steps.package_meta.outputs.version }}
+          path: dist/${{ steps.package_meta.outputs.archive_name }}
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+      - name: Upload packaging diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-packaging-diagnostics-${{ github.run_number }}
+          path: |
+            build/spkup/warn-spkup.txt
+            build/spkup/xref-spkup.html
+          if-no-files-found: ignore
+          retention-days: 14

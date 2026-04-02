@@ -2,7 +2,7 @@
 
 Push-to-talk speech-to-text for Windows. Hold a hotkey, speak, release — transcribed text lands in your clipboard.
 
-Planned distribution note: once Phase 9 is implemented, GitHub Releases are intended to become the project's distribution channel.
+Planned distribution note: Phase 9 defines the release contract and documentation baseline, but packaging and GitHub release automation are still to be implemented.
 
 - Global hotkey (configurable, default `Ctrl+Shift+Space`)
 - Local Whisper inference via [faster-whisper](https://github.com/SYSTRAN/faster-whisper) — no cloud, no API key
@@ -33,6 +33,19 @@ run.bat
 
 ---
 
+## Release Versioning
+
+The project uses one release version contract:
+
+- Source version lives in `src/spkup/__init__.py` as `__version__ = "X.Y.Z"`
+- Build metadata reads that version through Hatchling dynamic metadata in `pyproject.toml`
+- Git release tags must be `vX.Y.Z` for the same source version
+- Initial Windows release artifacts should derive from that same version, for example `spkup-X.Y.Z-windows-x64.zip`
+
+Until Phase 9 packaging automation exists, this is a documented operator workflow rather than an automated pipeline.
+
+---
+
 ## Project Docs
 
 | File | Contents |
@@ -42,6 +55,7 @@ run.bat
 | [docs/03-testing.md](docs/03-testing.md) | What gets unit tests, what gets manual verification, TDD rules |
 | [docs/04-delivery-workflow.md](docs/04-delivery-workflow.md) | Phase lifecycle, definition of done, phase map |
 | [docs/05-ai-agent-workflow.md](docs/05-ai-agent-workflow.md) | Rules for AI agents working in this repo |
+| [docs/06-packaging-release.md](docs/06-packaging-release.md) | Versioning contract, Windows artifact baseline, operator release workflow |
 
 ## Delivery Specs
 

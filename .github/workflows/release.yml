@@ -1,0 +1,111 @@
+name: Release Windows Artifact
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release-windows:
+    runs-on: windows-latest
+
+    env:
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Validate release tag and derive artifact names
+        id: release_meta
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          if ($tag -notmatch '^v\d+\.\d+\.\d+$') {
+            throw "Release tags must match vX.Y.Z. Received: $tag"
+          }
+
+          $version = $tag.Substring(1)
+          $packageVersion = python -c "from pathlib import Path; namespace = {}; exec(Path('src/spkup/__init__.py').read_text(encoding='utf-8'), namespace); print(namespace['__version__'])"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to read src/spkup/__init__.py version."
+          }
+
+          if ($packageVersion -ne $version) {
+            throw "Tag $tag does not match src/spkup/__init__.py version $packageVersion."
+          }
+
+          $bundleName = "spkup-$version-windows-x64"
+          $archiveName = "$bundleName.zip"
+
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "bundle_name=$bundleName" >> $env:GITHUB_OUTPUT
+          "archive_name=$archiveName" >> $env:GITHUB_OUTPUT
+
+      - name: Install build dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install ".[build]"
+
+      - name: Build Windows artifact with PyInstaller
+        shell: pwsh
+        run: |
+          foreach ($path in @('build', 'dist')) {
+            if (Test-Path $path) {
+              Remove-Item $path -Recurse -Force
+            }
+          }
+
+          python -m PyInstaller --clean spkup.spec
+
+      - name: Package release archive
+        id: package
+        shell: pwsh
+        run: |
+          $distDir = Join-Path $PWD 'dist'
+          $sourceBundle = Join-Path $distDir 'spkup'
+          if (-not (Test-Path $sourceBundle)) {
+            throw "Expected PyInstaller bundle at $sourceBundle"
+          }
+
+          $versionedBundle = Join-Path $distDir "${{ steps.release_meta.outputs.bundle_name }}"
+          if (Test-Path $versionedBundle) {
+            Remove-Item $versionedBundle -Recurse -Force
+          }
+
+          Rename-Item -Path $sourceBundle -NewName "${{ steps.release_meta.outputs.bundle_name }}"
+
+          $archivePath = Join-Path $distDir "${{ steps.release_meta.outputs.archive_name }}"
+          if (Test-Path $archivePath) {
+            Remove-Item $archivePath -Force
+          }
+
+          Compress-Archive -Path $versionedBundle -DestinationPath $archivePath -CompressionLevel Optimal
+
+          if (-not (Test-Path $archivePath)) {
+            throw "Expected release archive at $archivePath"
+          }
+
+          "archive_path=$archivePath" >> $env:GITHUB_OUTPUT
+
+      - name: Publish GitHub Release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: spkup v${{ steps.release_meta.outputs.version }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          overwrite_files: true
+          files: |
+            ${{ steps.package.outputs.archive_path }}

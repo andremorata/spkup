@@ -56,6 +56,15 @@ Update `progress.status.md`:
 - Record evidence (automated output and/or manual observation notes)
 - Set the next phase as the new active phase
 
+For Phase 9 release/versioning work, the repo follows one contract:
+
+- Source version format: `X.Y.Z`
+- Source of truth: `src/spkup/__init__.py`
+- Git tag format: `vX.Y.Z`
+- Release artifact names: derived directly from the same `X.Y.Z` value
+
+The detailed operator workflow for preparing and cutting a release is documented in [docs/06-packaging-release.md](docs/06-packaging-release.md).
+
 ---
 
 ## 5. Phase Map
@@ -79,3 +88,5 @@ Update `progress.status.md`:
 Today, validation is performed locally on the developer machine. That includes running the required tests and completing any manual checks defined by the active phase issue.
 
 Phase 9 is planned to add packaging plus CI/release automation so the same checks can run repeatably in an automated pipeline. That automation does not exist yet, so this workflow still treats local validation as the source of truth for current phases.
+
+Until that automation lands, cutting a release remains an operator-driven process: update the source version once, validate locally, create the matching `vX.Y.Z` tag, and publish artifacts that use the same version in their filenames.

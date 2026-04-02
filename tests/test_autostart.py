@@ -4,6 +4,18 @@ from unittest.mock import MagicMock, patch
 from spkup import autostart
 
 
+def test_exe_command_uses_python_module_in_dev_mode():
+    with patch.object(autostart.sys, "executable", r"C:\Python312\python.exe"):
+        assert autostart._exe_command() == r'"C:\Python312\python.exe" -m spkup'
+
+
+def test_exe_command_uses_frozen_executable_when_packaged():
+    with patch.object(autostart.sys, "frozen", True, create=True), patch.object(
+        autostart.sys, "executable", r"C:\Apps\spkup\spkup.exe"
+    ):
+        assert autostart._exe_command() == r'"C:\Apps\spkup\spkup.exe"'
+
+
 def test_enable_autostart_calls_set_value_ex():
     """enable_autostart() writes value name 'spkup' to the Run key."""
     mock_key = MagicMock()
@@ -12,6 +24,7 @@ def test_enable_autostart_calls_set_value_ex():
         autostart.enable_autostart()
     mock_set.assert_called_once()
     assert mock_set.call_args.args[1] == "spkup"
+    assert mock_set.call_args.args[4] == autostart._exe_command()
 
 
 def test_disable_autostart_calls_delete_value():

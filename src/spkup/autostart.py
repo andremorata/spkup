@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import sys
+from pathlib import Path
+
 import winreg
 
 _RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
@@ -8,7 +10,9 @@ _APP_NAME = "spkup"
 
 
 def _exe_command() -> str:
-    """Return the command that launches spkup via the current Python interpreter."""
+    """Return the command that launches spkup in dev or frozen mode."""
+    if getattr(sys, "frozen", False):
+        return f'"{Path(sys.executable).resolve()}"'
     return f'"{sys.executable}" -m spkup'
 
 
