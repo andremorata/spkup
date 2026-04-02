@@ -7,7 +7,7 @@
 - Active phase: Phase 9 — Packaging + release readiness
 - Overall status: Blocked
 - Last updated: 2026-04-01
-- Primary risks: no GitHub remote is configured to exercise Actions/Releases; packaged Windows app still needs manual primary-flow validation
+- Primary risks: packaged Windows app still needs manual primary-flow validation from the frozen build; packaging/runtime behavior may still differ from local source execution
 
 ## Status Vocabulary
 
@@ -29,7 +29,7 @@
 | 6 | Clipboard + full signal wiring | Completed (validated) | 2026-04-01 | clipboard.py; full recording→transcription→clipboard pipeline wired in app.py; 28/28 passed | Handoff to Phase 7 |
 | 7 | Settings dialog | Completed (validated) | 2026-04-01 | settings_dialog.py; model download worker; hotkey capture widget; overlay position selector; 28/28 passed | Handoff to Phase 8 |
 | 8 | Polish | Completed (validated) | 2026-04-01 | logging_setup.py, autostart.py, test_autostart.py created; recorder/transcriber/app/settings_dialog updated; CUDA OOM fallback; first-run UX; hotkey toggle mode added for quick-tap lock/unlock recording; recent transcription history implemented in app.py, transcription_history.py, and transcription_history_window.py; automated validation already recorded with `.venv\Scripts\python -m pytest tests/ -v` passing 42/42; user-confirmed remaining manual Phase 8 checks passed on 2026-04-01 | Handoff to Phase 9 |
-| 9 | Packaging + release readiness | Blocked | 2026-04-01 | Local implementation is in place for the versioning contract, packaging baseline, CI workflow, and release workflow. Local validation passed: `pytest` 48/48, `py_compile` clean, PyInstaller build succeeded, and workflow files were reviewed as sane. External/manual validation is still pending. | Configure a GitHub remote and push the workflow files, run CI on a push or PR, create a test `vX.Y.Z` tag to exercise the release workflow, and manually validate the frozen Windows app primary flow |
+| 9 | Packaging + release readiness | Blocked | 2026-04-01 | Versioning contract, packaging baseline, CI workflow, and release workflow are implemented. Local validation passed: `pytest` 48/48, `py_compile` clean, PyInstaller build succeeded. GitHub validation also passed: CI run `23877539142` succeeded on `main`, and release run `23877811976` published `spkup-0.1.0-windows-x64.zip` to GitHub Release `v0.1.0`. The only remaining validation gap is manual frozen-app primary-flow verification. | Launch the packaged Windows build and manually verify tray startup, hotkey capture, overlay transitions, transcription, clipboard output, and autostart behavior from the frozen app |
 
 ## Validation Notes
 
@@ -53,4 +53,5 @@ To mark a phase as `Completed (validated)`, record:
 - 2026-04-01: Phase 8 automated validation rerun recorded. `.venv\Scripts\python -m pytest tests/ -v` passed 42/42. No manual validation was performed in this run; Phase 8 remains in progress pending tray/window verification.
 - 2026-04-01: Progress tracker updated to reflect planned Phase 9. Added a blocked Phase 9 row for packaging and release readiness, explicitly gated on Phase 8 validation. This was a planning/spec update only; no Phase 9 implementation or packaging validation was performed.
 - 2026-04-01: Remaining manual Phase 8 validation checks passed. Automated validation had already been recorded with `.venv\Scripts\python -m pytest tests/ -v` passing 42/42, and user-confirmed manual Phase 8 checks now complete; Phase 8 is validated and Phase 9 is unblocked.
-- 2026-04-01: Phase 9 local implementation and local validation are recorded. Versioning contract, packaging baseline, CI workflow, and release workflow are in place locally. Local validation passed with `pytest` 48/48, `py_compile` clean, a successful PyInstaller build, and a sanity review of the workflow files. Phase 9 remains blocked, not validated, because no GitHub remote is configured to exercise Actions/Releases and the frozen Windows app still needs manual primary-flow validation.
+- 2026-04-01: Phase 9 local implementation and local validation are recorded. Versioning contract, packaging baseline, CI workflow, and release workflow are in place locally. Local validation passed with `pytest` 48/48, `py_compile` clean, a successful PyInstaller build, and a sanity review of the workflow files.
+- 2026-04-01: GitHub validation for Phase 9 succeeded. CI run `23877539142` passed on `main` after the metadata-resolution fix, and release run `23877811976` built and published GitHub Release `v0.1.0` with attached asset `spkup-0.1.0-windows-x64.zip`. Phase 9 remains blocked only on manual validation of the frozen Windows app primary flow.

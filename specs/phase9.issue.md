@@ -87,10 +87,10 @@ Implement the packaging and release automation milestone for `spkup`: establish 
 
 | ID | Criterion | How To Verify | Current Status |
 | --- | --- | --- | --- |
-| AC-9.1 | PyInstaller baseline produces a runnable Windows frozen build | Run the documented packaging command from a clean checkout on Windows; launch the produced artifact and complete the primary transcription flow | Packaging build passes locally; manual frozen-app flow validation is still pending |
-| AC-9.2 | GitHub Actions provides repeatable validation on PR/push | Open a pull request or push a branch change; verify the CI workflow runs tests and packaging-oriented validation successfully | Workflow is implemented locally, but no GitHub remote is configured so Actions has not been exercised |
+| AC-9.1 | PyInstaller baseline produces a runnable Windows frozen build | Run the documented packaging command from a clean checkout on Windows; launch the produced artifact and complete the primary transcription flow | Packaging build passes locally and in GitHub Actions; manual frozen-app flow validation is still pending |
+| AC-9.2 | GitHub Actions provides repeatable validation on PR/push | Open a pull request or push a branch change; verify the CI workflow runs tests and packaging-oriented validation successfully | Satisfied: CI run `23877539142` passed on `main` |
 | AC-9.3 | Source version, Git tags, and release naming follow one policy | Prepare a candidate release and verify `X.Y.Z` source version maps directly to `vX.Y.Z` tag and artifact naming | Implemented and validated locally |
-| AC-9.4 | GitHub Releases is the automated distribution channel for Windows artifacts | Create a `vX.Y.Z` tag in a test release scenario and verify GitHub Actions publishes the Windows artifact to the matching GitHub Release | Release workflow is implemented locally, but no GitHub remote is configured so GitHub Releases automation has not been exercised |
+| AC-9.4 | GitHub Releases is the automated distribution channel for Windows artifacts | Create a `vX.Y.Z` tag in a test release scenario and verify GitHub Actions publishes the Windows artifact to the matching GitHub Release | Satisfied: release run `23877811976` published `spkup-0.1.0-windows-x64.zip` to GitHub Release `v0.1.0` |
 
 ---
 
@@ -98,7 +98,7 @@ Implement the packaging and release automation milestone for `spkup`: establish 
 
 - PyInstaller packaging may require explicit handling for PyQt6 resources, runtime hooks, or model/runtime dependencies that behave differently in a frozen build than in local development.
 - GitHub-hosted Windows runners may expose environment-specific packaging differences that do not appear in a local workstation build.
-- This phase remains open because two validations are still outstanding: GitHub Actions and Releases cannot be exercised without a GitHub remote, and the packaged Windows app still needs manual primary-flow validation.
+- This phase remains open because manual validation of the packaged Windows app primary flow is still outstanding.
 
 ---
 
@@ -106,7 +106,9 @@ Implement the packaging and release automation milestone for `spkup`: establish 
 
 - 2026-04-01: Local Phase 9 implementation is in place for the versioning contract, packaging baseline, CI workflow, and release workflow.
 - 2026-04-01: Local validation passed: `pytest` 48/48, `py_compile` clean, PyInstaller build succeeded, and workflow files were reviewed as sane.
-- 2026-04-01: Phase 9 is not complete. Remaining blockers are external/manual: configure a GitHub remote so Actions and Releases can be exercised, then manually validate the frozen Windows app primary flow.
+- 2026-04-01: CI validation succeeded on GitHub. Workflow run `23877539142` passed on `main` after the metadata-resolution fix.
+- 2026-04-01: First automated release succeeded on GitHub. Workflow run `23877811976` published Release `v0.1.0` with asset `spkup-0.1.0-windows-x64.zip`.
+- 2026-04-01: Phase 9 is not complete. The remaining blocker is manual validation of the frozen Windows app primary flow.
 
 ---
 
