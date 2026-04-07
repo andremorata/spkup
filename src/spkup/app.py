@@ -14,12 +14,15 @@ from spkup.config import AppConfig, CONFIG_PATH, load
 from spkup.hotkey import HotkeyListener
 from spkup.model_manager import is_downloaded
 from spkup.overlay import OverlayState, OverlayWidget
+from spkup.playback_mute import PlaybackMuteController
 from spkup.recorder import AudioRecorder
 from spkup.transcription_history import TranscriptionHistory
 from spkup.transcription_history_window import TranscriptionHistoryWindow
 from spkup.transcriber import Transcriber
 
 _log = logging.getLogger(__name__)
+_START_CUE_DURATION_MS = 70
+_MUTE_AFTER_START_CUE_DELAY_MS = _START_CUE_DURATION_MS + 10
 
 
 def _beep(freq: int, duration_ms: int) -> None:
@@ -87,11 +90,17 @@ class App:
         is_first_run = not CONFIG_PATH.exists()
         self._config = load()
         self._listener_active = False
+        self._recording_start_pending = False
+        self._recording_active = False
 
         # Core components
         self._recorder = AudioRecorder(max_seconds=self._config.max_recording_seconds)
         self._transcriber = Transcriber(self._config)
         self._overlay = OverlayWidget(self._config.overlay_position)
+        self._playback_mute = PlaybackMuteController()
+        self._recording_start_timer = QTimer()
+        self._recording_start_timer.setSingleShot(True)
+        self._recording_start_timer.timeout.connect(self._begin_recording_session)
         self._transcription_history = TranscriptionHistory(max_entries=5)
         self._transcription_history_window = TranscriptionHistoryWindow()
         self._transcription_history_window.delete_requested.connect(
@@ -228,21 +237,65 @@ class App:
 
     # ---------- Recording lifecycle ------------------------------------------
 
+    def _begin_recording_session(self) -> None:
+        if not self._recording_start_pending:
+            return
+
+        self._recording_start_pending = False
+        self._recording_active = True
+
+        if self._config.mute_playback_while_recording:
+            self._playback_mute.mute_for_recording()
+
+        self._overlay.show_state(OverlayState.RECORDING)
+        self._recorder.start()
+
+    def _restore_playback_mute(self) -> None:
+        if self._playback_mute.restore_pending:
+            self._playback_mute.restore()
+
     def _on_recording_started(self) -> None:
         _log.debug("Recording started")
         self._tray.setIcon(_make_tray_icon(color="#ff4444"))
+
+        if self._config.mute_playback_while_recording:
+            self._recording_start_pending = True
+            _beep(880, _START_CUE_DURATION_MS)
+            self._recording_start_timer.start(_MUTE_AFTER_START_CUE_DELAY_MS)
+            return
+
+        self._recording_active = True
         self._recorder.start()
         self._overlay.show_state(OverlayState.RECORDING)
-        _beep(880, 70)
+        _beep(880, _START_CUE_DURATION_MS)
 
     def _on_recording_stopped(self) -> None:
         _log.debug("Recording stopped; transcribing")
         self._tray.setIcon(_make_tray_icon(color="#ffffff"))
+
+        if self._recording_start_timer.isActive():
+            self._recording_start_timer.stop()
+            self._recording_start_pending = False
+            self._overlay.show_state(OverlayState.HIDDEN)
+            return
+
+        if not self._recording_active:
+            self._restore_playback_mute()
+            self._overlay.show_state(OverlayState.HIDDEN)
+            return
+
+        self._recording_active = False
         self._recorder.stop()
+        self._restore_playback_mute()
         self._overlay.show_state(OverlayState.TRANSCRIBING)
 
     def _on_recording_error(self, msg: str) -> None:
         _log.error("Recording error: %s", msg)
+        if self._recording_start_timer.isActive():
+            self._recording_start_timer.stop()
+        self._recording_start_pending = False
+        self._recording_active = False
+        self._restore_playback_mute()
         self._tray.setIcon(_make_tray_icon(color="#ffffff"))
         self._overlay.show_state(OverlayState.HIDDEN)
         if QSystemTrayIcon.supportsMessages():
@@ -312,7 +365,12 @@ class App:
 
     def _cleanup(self) -> None:
         _log.info("spkup shutting down")
+        if self._recording_start_timer.isActive():
+            self._recording_start_timer.stop()
+        self._recording_start_pending = False
+        self._recording_active = False
         self._recorder.stop()
+        self._restore_playback_mute()
         self._listener.stop()
 
     def run(self) -> int:

@@ -95,7 +95,7 @@ class HotkeyListener(QObject):
         if listener is not None:
             listener.stop()
 
-    def _on_press(self, key: keyboard.Key | keyboard.KeyCode) -> None:
+    def _on_press(self, key: keyboard.Key | keyboard.KeyCode | None) -> None:
         key_name = self._normalize_key(key)
         if key_name is None:
             return
@@ -129,7 +129,7 @@ class HotkeyListener(QObject):
                 Qt.ConnectionType.QueuedConnection,
             )
 
-    def _on_release(self, key: keyboard.Key | keyboard.KeyCode) -> None:
+    def _on_release(self, key: keyboard.Key | keyboard.KeyCode | None) -> None:
         key_name = self._normalize_key(key)
         if key_name is None:
             return
@@ -161,8 +161,11 @@ class HotkeyListener(QObject):
     def _emit_stopped(self) -> None:
         self.recording_stopped.emit()
 
-    def _normalize_key(self, key: keyboard.Key | keyboard.KeyCode) -> str | None:
-        if getattr(key, "char", None):
+    def _normalize_key(self, key: keyboard.Key | keyboard.KeyCode | None) -> str | None:
+        if key is None:
+            return None
+
+        if isinstance(key, keyboard.KeyCode) and key.char:
             return key.char.lower()
 
         key_name = getattr(key, "name", None)

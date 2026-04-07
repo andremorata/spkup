@@ -1,4 +1,5 @@
 import pytest
+from pynput import keyboard
 
 from spkup.hotkey import HotkeyListener, parse_hotkey
 
@@ -32,9 +33,9 @@ def test_parse_hotkey_invalid_inputs_raise_value_error(hotkey_str):
         parse_hotkey(hotkey_str)
 
 
-class _DummyKey:
+class _DummyKey(keyboard.KeyCode):
     def __init__(self, *, char=None, name=None):
-        self.char = char
+        super().__init__(char=char)
         self.name = name
 
 

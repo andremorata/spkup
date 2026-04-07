@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import dataclasses
+from typing import cast
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QKeyEvent
+from PyQt6.QtGui import QFocusEvent, QKeyEvent, QStandardItemModel
 from PyQt6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDialog,
     QHBoxLayout,
@@ -74,24 +76,27 @@ class HotkeyEdit(QLineEdit):
         self.setText(initial)
         self._capturing = False
 
-    def focusInEvent(self, event) -> None:
+    def focusInEvent(self, a0: QFocusEvent | None) -> None:
         self._capturing = True
         self.setText("Press hotkey…")
         self.setStyleSheet("")
-        super().focusInEvent(event)
+        super().focusInEvent(a0)
 
-    def focusOutEvent(self, event) -> None:
+    def focusOutEvent(self, a0: QFocusEvent | None) -> None:
         self._capturing = False
         self.setText(self._current)
         self.setStyleSheet("")
-        super().focusOutEvent(event)
+        super().focusOutEvent(a0)
 
-    def keyPressEvent(self, event: QKeyEvent) -> None:
-        if not self._capturing:
-            super().keyPressEvent(event)
+    def keyPressEvent(self, a0: QKeyEvent | None) -> None:
+        if a0 is None:
             return
 
-        key = event.key()
+        if not self._capturing:
+            super().keyPressEvent(a0)
+            return
+
+        key = a0.key()
         _MODIFIER_KEYS = {
             Qt.Key.Key_Control.value,
             Qt.Key.Key_Shift.value,
@@ -102,7 +107,7 @@ class HotkeyEdit(QLineEdit):
         if key in _MODIFIER_KEYS:
             return  # wait for the trigger key
 
-        mods = event.modifiers()
+        mods = a0.modifiers()
         parts: list[str] = []
         if mods & Qt.KeyboardModifier.ControlModifier:
             parts.append("ctrl")
@@ -198,7 +203,11 @@ class SettingsDialog(QDialog):
         self._device_combo.addItems(["cuda", "cpu"])
         has_cuda = _detect_cuda()
         if not has_cuda:
-            self._device_combo.model().item(0).setEnabled(False)
+            model = cast(QStandardItemModel | None, self._device_combo.model())
+            if model is not None:
+                item = model.item(0)
+                if item is not None:
+                    item.setEnabled(False)
             self._device_combo.setCurrentText("cpu")
         else:
             self._device_combo.setCurrentText(config.device)
@@ -229,6 +238,23 @@ class SettingsDialog(QDialog):
             lambda v: setattr(self._config, "overlay_position", v)
         )
         main_layout.addWidget(self._overlay_combo)
+
+        # ── Playback ──────────────────────────────────────────────────────────
+        self._mute_playback_checkbox = QCheckBox("Mute playback while recording")
+        self._mute_playback_checkbox.setChecked(
+            config.mute_playback_while_recording
+        )
+        self._mute_playback_checkbox.setToolTip(
+            "Temporarily mute playback output while recording is active."
+        )
+        self._mute_playback_checkbox.toggled.connect(
+            lambda checked: setattr(
+                self._config,
+                "mute_playback_while_recording",
+                checked,
+            )
+        )
+        main_layout.addWidget(self._mute_playback_checkbox)
 
         # ── Buttons ───────────────────────────────────────────────────────────
         main_layout.addSpacing(8)

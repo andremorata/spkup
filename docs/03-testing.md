@@ -44,6 +44,8 @@ pytest
 | `model_manager.py` | `tests/test_model_manager.py` | Cache dir creation, path construction, `is_downloaded` with mock filesystem |
 | `clipboard.py` | `tests/test_clipboard.py` | `setText` called with correct string (mock `QApplication.clipboard()`) |
 | `autostart.py` | `tests/test_autostart.py` | Enable/disable/query with mocked `winreg` |
+| `playback_mute.py` | `tests/test_playback_mute.py` | Snapshot/restore behavior, already-muted path, backend failure handling, restore retry, re-entry guard |
+| `app.py` (playback-mute lifecycle) | `tests/test_app_playback_mute.py` | Begin-recording mute path, delayed-start no-op path, stop/error/cleanup restore behavior with mocked Qt-heavy dependencies |
 | `transcription_history.py` | `tests/test_transcription_history.py` | Add/list ordering, keep only last 5 entries, delete behavior, Unicode text, duplicate entries remain distinct |
 
 These are the checks that are suitable for repeatable automated execution. Today they are run locally with `pytest`; Phase 9 is planned to run the same class of checks in CI.
@@ -55,10 +57,12 @@ These are the checks that are suitable for repeatable automated execution. Today
 CI is not in place yet, but the intended CI scope is the automated checks above:
 
 - Pure Python unit tests under `tests/`
-- Mocked behavior for config, hotkey parsing, recorder lifecycle, model path management, clipboard integration, Windows autostart registry calls, and transcription history rules
+- Mocked behavior for config, hotkey parsing, recorder lifecycle, model path management, clipboard integration, Windows autostart registry calls, playback-mute controller and app lifecycle rules, and transcription history rules
 - Regression tests for defects that can be reproduced without a live Qt desktop session, real audio devices, or GPU execution
 
 For release preparation, these same tests remain the required automated baseline before cutting a version. A release candidate is not ready if `pytest` is failing locally, even though CI automation for that gate has not been implemented yet.
+
+The current local automated baseline includes playback-mute coverage in `tests/test_playback_mute.py` and `tests/test_app_playback_mute.py`. The latest full local suite rerun in this workspace used `.venv\Scripts\python -m pytest tests\ -q` and exited 0.
 
 ---
 
@@ -74,6 +78,7 @@ These modules involve Qt widget painting, hardware I/O, or CUDA inference — no
 | `recorder.py` (stream) | Hold hotkey, speak, release → non-empty array shape printed to stdout |
 | `transcriber.py` | Audio captured → text transcribed correctly in PT and EN |
 | `settings_dialog.py` | Dialog opens; hotkey capture works; save writes to `config.json` |
+| `playback_mute.py` + recording flow | On Windows, enabling **Mute playback while recording** mutes only during active capture, restores the exact prior mute state on stop, restores after recording error or app quit, and behaves the same for hold-to-record and quick-tap toggle flows |
 | `transcription_history_window.py` | Window shows newest-first session entries; copy/delete act on the selected entry; close/reopen preserves session history while the app stays running |
 
 ---

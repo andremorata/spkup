@@ -72,7 +72,7 @@ Hotkey tapped again → recording_stopped → Recorder.stop()
 | 5 | Visual overlay | `specs/phase5.issue.md` |
 | 6 | Clipboard + full signal wiring | `specs/phase6.issue.md` |
 | 7 | Settings dialog | `specs/phase7.issue.md` |
-| 8 | Polish + recent transcription history | `specs/phase8.issue.md` |
+| 8 | Polish + recent transcription history + temporary playback muting during capture | `specs/phase8.issue.md` |
 | 9 | Planned packaging + GitHub CI/CD + versioning + releases | `specs/phase9.issue.md` |
 
 ---

@@ -33,6 +33,8 @@ flowchart TD
     TR --> App
     App -- add/list/delete --> RH[TranscriptionHistory\nsession memory]
     App -- set_entries/show --> HW[TranscriptionHistoryWindow\nnon-modal QDialog]
+    App -- mute / restore --> PM[PlaybackMuteController\nrecording session state]
+    PM -- get_mute / set_mute --> PB[WindowsPlaybackMuteBackend\nctypes Core Audio]
     App -- setText --> CB[Clipboard\nQApplication]
     HW -- copy selected --> CB
     App -- show_state --> OV[OverlayWidget\nframeless QWidget]
@@ -55,10 +57,12 @@ flowchart TD
 | `overlay.py` | `OverlayWidget` | Frameless always-on-top click-through widget; RECORDING / TRANSCRIBING / DONE states |
 | `clipboard.py` | `copy_to_clipboard` | `QApplication.clipboard().setText()` — Unicode-safe |
 | `app.py` | `App` | `QApplication` + `QSystemTrayIcon`; instantiates all components; wires all signals |
-| `settings_dialog.py` | `SettingsDialog` | Hotkey capture, model picker, device selector, overlay position; reinitializes components on save |
+| `settings_dialog.py` | `SettingsDialog` | Hotkey capture, model picker, device selector, overlay position, playback-mute toggle; reinitializes components on save |
 | `transcription_history.py` | `TranscriptionHistory` | Session-scoped in-memory store of the last 5 completed transcriptions |
 | `transcription_history.py` | `TranscriptionHistoryEntry` | Immutable history item with stable session-local id and text |
 | `transcription_history_window.py` | `TranscriptionHistoryWindow` | Non-modal recent-history window; previews entries and emits copy/delete requests |
+| `playback_mute.py` | `PlaybackMuteController` | Snapshots and restores the default playback mute state around a recording session |
+| `playback_mute.py` | `WindowsPlaybackMuteBackend` | Windows Core Audio mute backend for the default playback endpoint via `ctypes` |
 | `autostart.py` | functions | `winreg` HKCU Run key management |
 | `logging_setup.py` | `configure_logging` | Rotating file handler + stderr handler |
 | `__main__.py` | `main` | Entry point: configure logging, create `App`, call `run()` |
@@ -70,12 +74,14 @@ flowchart TD
 ```
 Hotkey held
   → HotkeyListener.recording_started
+    → if AppConfig.mute_playback_while_recording: play start cue, then PlaybackMuteController.mute_for_recording()
     → AudioRecorder.start()
     → OverlayWidget.show_state(RECORDING)
 
 Hotkey released
   → HotkeyListener.recording_stopped
     → AudioRecorder.stop()
+    → PlaybackMuteController.restore()
     → OverlayWidget.show_state(TRANSCRIBING)
 
 AudioRecorder.recording_finished(audio: np.ndarray)
@@ -91,6 +97,9 @@ Transcriber.transcription_finished(text: str)
 Transcriber.transcription_error(msg: str)  # or AudioRecorder.recording_error
   → OverlayWidget.show_state(HIDDEN)
   → QSystemTrayIcon.showMessage(error msg)
+
+AudioRecorder.recording_error(msg: str) or app shutdown during active capture
+  → PlaybackMuteController.restore()
 
 Tray action "Recent transcriptions"
   → App._show_transcription_history()
@@ -135,6 +144,7 @@ History window copy
 | `compute_type` | `"float16"` | `"float16"`, `"int8"`, or `"float32"` |
 | `overlay_position` | `"bottom-right"` | `"bottom-right"`, `"bottom-left"`, `"top-right"`, `"top-left"` |
 | `max_recording_seconds` | `120` | Safety cutoff for `AudioRecorder` |
+| `mute_playback_while_recording` | `False` | When enabled, snapshot the default playback mute state, mute during active capture, and restore on stop/error/quit |
 
 ---
 
@@ -169,6 +179,7 @@ e:\spkup\
     overlay.py
     clipboard.py
     model_manager.py
+    playback_mute.py
     settings_dialog.py
     transcription_history.py
     transcription_history_window.py
@@ -182,7 +193,9 @@ e:\spkup\
     test_recorder.py
     test_model_manager.py
     test_clipboard.py
+    test_app_playback_mute.py
     test_autostart.py
+    test_playback_mute.py
     test_transcription_history.py
   docs/
   specs/

@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 from enum import Enum
+from typing import Any, cast
 
-from PyQt6.QtCore import QEasingCurve, QPropertyAnimation, Qt, QTimer, pyqtProperty
-from PyQt6.QtGui import QColor, QFont, QPainter
+from PyQt6 import QtCore
+from PyQt6.QtCore import QEasingCurve, QPropertyAnimation, Qt, QTimer
+from PyQt6.QtGui import QColor, QFont, QPaintEvent, QPainter
 from PyQt6.QtWidgets import QApplication, QWidget
 
 _MARGIN = 16
+_pyqt_property = cast(Any, getattr(QtCore, "pyqtProperty"))
 
 
 class OverlayState(Enum):
@@ -75,7 +78,7 @@ class OverlayWidget(QWidget):
         self._pill_opacity_val = value
         self.update()
 
-    pill_opacity = pyqtProperty(float, _get_pill_opacity, _set_pill_opacity)
+    pill_opacity = _pyqt_property(float, _get_pill_opacity, _set_pill_opacity)
 
     # ---------- Public API ----------
 
@@ -108,7 +111,7 @@ class OverlayWidget(QWidget):
         self._state = OverlayState.HIDDEN
         self.hide()
 
-    def paintEvent(self, event) -> None:  # noqa: N802
+    def paintEvent(self, a0: QPaintEvent | None) -> None:  # noqa: N802
         if self._state == OverlayState.HIDDEN:
             return
 

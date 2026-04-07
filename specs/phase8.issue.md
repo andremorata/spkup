@@ -20,6 +20,7 @@ Harden the application for daily use: structured file logging, graceful error re
 Explicit Phase 8 extension:
 
 - Recent transcription history was added to Phase 8 on 2026-04-01 and is in scope for this phase only.
+- Temporary playback muting during capture was added to Phase 8 on 2026-04-07 and is in scope for this phase only.
 
 ---
 
@@ -112,6 +113,20 @@ Explicit Phase 8 extension:
 
 ---
 
+### Task 8.6 — Temporary playback muting during capture
+
+**Deliverable:** Updated `config.py`, `settings_dialog.py`, `playback_mute.py`, `app.py`, `tests/test_playback_mute.py`, and `tests/test_app_playback_mute.py`
+
+- [x] Add a user-facing setting that temporarily mutes playback output while recording is active
+- [x] Apply the temporary mute when capture starts and the setting is enabled
+- [x] Restore the pre-capture mute state when recording stops
+- [x] Cover both hold-to-record and quick-tap toggle recording paths
+- [x] Ensure failure and app-quit paths restore the pre-capture mute state so the machine is not left muted
+
+**Acceptance criterion:** Implementation and automated coverage are in place, but manual Windows validation is still pending: `pytest tests/test_playback_mute.py tests/test_app_playback_mute.py -q` passes and the full local suite rerun `.venv\Scripts\python -m pytest tests\ -q` exits 0. Manual validation is still required for the actual playback endpoint behavior: with the setting enabled, playback output should be muted only while capture is active; stopping capture should restore the exact pre-capture mute state; quick-tap toggle recording should follow the same mute and restore behavior; failure or app quit during active capture should not leave the machine muted. (AC-8.6)
+
+---
+
 ## Acceptance Criteria
 
 | ID | Criterion | How To Verify |
@@ -121,3 +136,4 @@ Explicit Phase 8 extension:
 | AC-8.3 | Auto-start registry key managed correctly | `pytest tests/test_autostart.py` + manual registry check |
 | AC-8.4 | First-run dialog opens on fresh install | Delete config and model; relaunch; dialog appears |
 | AC-8.5 | Recent-history window manages the last 5 session transcriptions | Perform 6 transcriptions; open tray action; verify copy and delete actions. Not manually validated in this session. |
+| AC-8.6 | Playback output is muted only during active capture and the prior mute state is always restored | Enable the setting; verify hold and quick-tap capture mute behavior; stop capture and confirm the previous mute state returns; repeat with a forced failure or app quit during capture. |
