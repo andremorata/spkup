@@ -97,6 +97,7 @@ Hotkey tapped again → recording_stopped → Recorder.stop()
 | --- | --- | --- | --- |
 | PyQt6 tray behaviour differences across Windows builds | Medium | Test on target machine only; personal tool | Open |
 | CUDA OOM if model size changes | Medium | Catch `OutOfMemoryError`; fallback to CPU | Open |
+| Transcription hangs on cold boot / CUDA init | Medium | Watchdog timer (300s default); auto-retry on CPU; manual retry via tray | Mitigated |
 | pynput requires no admin but may miss keys if focus is unusual | Low | Document known limitation; test common apps | Open |
 
 ---

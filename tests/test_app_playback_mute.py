@@ -13,8 +13,9 @@ from __future__ import annotations
 
 import sys
 from typing import cast
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
+from PyQt6.QtCore import QObject
 from PyQt6.QtWidgets import QApplication
 
 from spkup.app import App
@@ -64,11 +65,11 @@ def _make_stub_app(
     mute_playback: bool,
     recording_active: bool = False,
     recording_start_pending: bool = False,
-    timer_active: bool = False,
     controller: _FakePlaybackMuteController | None = None,
 ) -> tuple[App, _FakePlaybackMuteController]:
     """Build a minimal App shell with all heavy dependencies replaced by mocks."""
-    app = object.__new__(App)
+    app = QObject.__new__(App)
+    QObject.__init__(app)
 
     if controller is None:
         controller = _FakePlaybackMuteController()
@@ -77,10 +78,6 @@ def _make_stub_app(
     app._playback_mute = cast(PlaybackMuteController, controller)
     app._recording_active = recording_active
     app._recording_start_pending = recording_start_pending
-
-    timer = MagicMock()
-    timer.isActive.return_value = timer_active
-    app._recording_start_timer = timer
 
     app._overlay = MagicMock()
     app._recorder = MagicMock()
@@ -138,10 +135,12 @@ def test_on_recording_stopped_restores_mute_on_normal_path() -> None:
     ctrl.mute_for_recording()  # pre-arm: restore_pending = True
     app, _ = _make_stub_app(mute_playback=True, recording_active=True, controller=ctrl)
 
-    app._on_recording_stopped()
+    with patch("spkup.app.play_cue") as play_cue:
+        app._on_recording_stopped()
 
     assert ctrl.restore_call_count == 1
     assert app._recording_active is False
+    play_cue.assert_called_once_with("transcribing")
 
 
 def test_on_recording_stopped_no_restore_when_timer_still_active() -> None:
@@ -151,7 +150,6 @@ def test_on_recording_stopped_no_restore_when_timer_still_active() -> None:
     app, _ = _make_stub_app(
         mute_playback=True,
         recording_start_pending=True,
-        timer_active=True,
         controller=ctrl,
     )
 

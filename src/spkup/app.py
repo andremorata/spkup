@@ -1,11 +1,10 @@
 import logging
 import sys
 import threading
-import winsound
 from typing import cast
 
-from PyQt6.QtCore import Qt, QRect, QRectF, QTimer
-from PyQt6.QtGui import QBrush, QColor, QIcon, QPainter, QPen, QPixmap
+from PyQt6.QtCore import Qt, QRect, QRectF, QTimer, QObject, pyqtSignal
+from PyQt6.QtGui import QAction, QBrush, QColor, QIcon, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
 from spkup.autostart import disable_autostart, enable_autostart, is_autostart_enabled
@@ -16,20 +15,12 @@ from spkup.model_manager import is_downloaded
 from spkup.overlay import OverlayState, OverlayWidget
 from spkup.playback_mute import PlaybackMuteController
 from spkup.recorder import AudioRecorder
+from spkup.sound_cues import play_cue
 from spkup.transcription_history import TranscriptionHistory
 from spkup.transcription_history_window import TranscriptionHistoryWindow
 from spkup.transcriber import Transcriber
 
 _log = logging.getLogger(__name__)
-_START_CUE_DURATION_MS = 70
-_MUTE_AFTER_START_CUE_DELAY_MS = _START_CUE_DURATION_MS + 10
-
-
-def _beep(freq: int, duration_ms: int) -> None:
-    """Play a tone asynchronously so it never blocks the Qt event loop."""
-    threading.Thread(
-        target=winsound.Beep, args=(freq, duration_ms), daemon=True
-    ).start()
 
 
 def _make_tray_icon(size: int = 64, color: str = "#ffffff") -> QIcon:
@@ -82,8 +73,11 @@ def _make_tray_icon(size: int = 64, color: str = "#ffffff") -> QIcon:
     return QIcon(px)
 
 
-class App:
+class App(QObject):
+    _session_ready = pyqtSignal()
+
     def __init__(self):
+        super().__init__()
         self._app = cast(QApplication, QApplication.instance() or QApplication(sys.argv))
         self._app.setQuitOnLastWindowClosed(False)
 
@@ -98,9 +92,11 @@ class App:
         self._transcriber = Transcriber(self._config)
         self._overlay = OverlayWidget(self._config.overlay_position)
         self._playback_mute = PlaybackMuteController()
-        self._recording_start_timer = QTimer()
-        self._recording_start_timer.setSingleShot(True)
-        self._recording_start_timer.timeout.connect(self._begin_recording_session)
+        self._session_ready.connect(self._begin_recording_session)
+        self._transcription_watchdog = QTimer()
+        self._transcription_watchdog.setSingleShot(True)
+        self._transcription_watchdog.timeout.connect(self._on_transcription_timeout)
+        self._timeout_was_cuda_retry = False
         self._transcription_history = TranscriptionHistory(max_entries=5)
         self._transcription_history_window = TranscriptionHistoryWindow()
         self._transcription_history_window.delete_requested.connect(
@@ -143,6 +139,11 @@ class App:
         history_action = self._menu.addAction("Recent transcriptions")
         assert history_action is not None
         history_action.triggered.connect(self._show_transcription_history)
+        self._retry_action = cast(
+            QAction, self._menu.addAction("Retry last transcription")
+        )
+        self._retry_action.setEnabled(False)
+        self._retry_action.triggered.connect(self._on_retry_last)
         self._menu.addSeparator()
         quit_action = self._menu.addAction("Quit")
         assert quit_action is not None
@@ -203,6 +204,9 @@ class App:
             or old.device != new_config.device
             or old.compute_type != new_config.compute_type
         ):
+            self._transcription_watchdog.stop()
+            self._timeout_was_cuda_retry = False
+            self._retry_action.setEnabled(False)
             old_transcriber = self._transcriber
             self._recorder.recording_finished.disconnect(old_transcriber.transcribe)
             old_transcriber.transcription_finished.disconnect(
@@ -254,27 +258,49 @@ class App:
         if self._playback_mute.restore_pending:
             self._playback_mute.restore()
 
+    def _start_transcription_watchdog(self) -> None:
+        watchdog = getattr(self, "_transcription_watchdog", None)
+        if watchdog is not None:
+            watchdog.start(self._config.transcription_timeout_seconds * 1000)
+
+    def _stop_transcription_watchdog(self) -> None:
+        watchdog = getattr(self, "_transcription_watchdog", None)
+        if watchdog is not None:
+            watchdog.stop()
+
+    def _set_retry_action_enabled(self, enabled: bool) -> None:
+        retry_action = getattr(self, "_retry_action", None)
+        if retry_action is not None:
+            retry_action.setEnabled(enabled)
+
     def _on_recording_started(self) -> None:
         _log.debug("Recording started")
         self._tray.setIcon(_make_tray_icon(color="#ff4444"))
 
+        self._stop_transcription_watchdog()
+        self._timeout_was_cuda_retry = False
+        self._set_retry_action_enabled(False)
+
         if self._config.mute_playback_while_recording:
             self._recording_start_pending = True
-            _beep(880, _START_CUE_DURATION_MS)
-            self._recording_start_timer.start(_MUTE_AFTER_START_CUE_DELAY_MS)
+            threading.Thread(target=self._play_start_cue_then_begin, daemon=True).start()
             return
 
         self._recording_active = True
+        play_cue("start")
         self._recorder.start()
         self._overlay.show_state(OverlayState.RECORDING)
-        _beep(880, _START_CUE_DURATION_MS)
+
+    def _play_start_cue_then_begin(self) -> None:
+        play_cue("start", blocking=True)
+        if self._recording_start_pending:
+            self._session_ready.emit()
 
     def _on_recording_stopped(self) -> None:
         _log.debug("Recording stopped; transcribing")
         self._tray.setIcon(_make_tray_icon(color="#ffffff"))
 
-        if self._recording_start_timer.isActive():
-            self._recording_start_timer.stop()
+        if self._recording_start_pending:
             self._recording_start_pending = False
             self._overlay.show_state(OverlayState.HIDDEN)
             return
@@ -288,11 +314,12 @@ class App:
         self._recorder.stop()
         self._restore_playback_mute()
         self._overlay.show_state(OverlayState.TRANSCRIBING)
+        self._timeout_was_cuda_retry = False
+        self._start_transcription_watchdog()
+        play_cue("transcribing")
 
     def _on_recording_error(self, msg: str) -> None:
         _log.error("Recording error: %s", msg)
-        if self._recording_start_timer.isActive():
-            self._recording_start_timer.stop()
         self._recording_start_pending = False
         self._recording_active = False
         self._restore_playback_mute()
@@ -329,6 +356,7 @@ class App:
         _log.debug("Copied transcription history entry: %d chars", len(text))
 
     def _on_transcription_finished(self, text: str) -> None:
+        self._stop_transcription_watchdog()
         _log.info("Transcription finished: %d chars", len(text))
         copy_to_clipboard(text)
         entry = self._transcription_history.add(text)
@@ -336,15 +364,15 @@ class App:
         self._transcription_history_window.set_entries(
             self._transcription_history.list_entries()
         )
+        self._set_retry_action_enabled(False)
         self._overlay.show_state(OverlayState.DONE)
-        threading.Thread(
-            target=lambda: (winsound.Beep(880, 55), winsound.Beep(1108, 90)),
-            daemon=True,
-        ).start()
+        play_cue("done")
 
     def _on_transcription_error(self, msg: str) -> None:
+        self._stop_transcription_watchdog()
         _log.error("Transcription error: %s", msg)
-        self._overlay.show_state(OverlayState.HIDDEN)
+        self._overlay.show_state(OverlayState.ERROR)
+        self._set_retry_action_enabled(self._transcriber.has_pending_retry)
         if QSystemTrayIcon.supportsMessages():
             self._tray.showMessage(
                 "spkup",
@@ -352,6 +380,46 @@ class App:
                 QSystemTrayIcon.MessageIcon.Warning,
                 3000,
             )
+
+    def _on_transcription_timeout(self) -> None:
+        device = self._config.device
+        _log.error(
+            "Transcription watchdog timeout after %d s (device=%s, model=%s)",
+            self._config.transcription_timeout_seconds,
+            device,
+            self._config.model_size,
+        )
+
+        self._transcriber.cleanup_worker()
+
+        if device != "cpu" and not self._timeout_was_cuda_retry:
+            _log.info("Auto-retrying transcription on CPU after timeout")
+            self._timeout_was_cuda_retry = True
+            if self._transcriber.retry_last(force_cpu=True):
+                self._overlay.show_state(OverlayState.TRANSCRIBING)
+                self._start_transcription_watchdog()
+                return
+
+        self._timeout_was_cuda_retry = False
+        self._overlay.show_state(OverlayState.ERROR)
+        self._set_retry_action_enabled(self._transcriber.has_pending_retry)
+        if QSystemTrayIcon.supportsMessages():
+            self._tray.showMessage(
+                "spkup",
+                "Transcription timed out. Use 'Retry last transcription' to try again.",
+                QSystemTrayIcon.MessageIcon.Warning,
+                4000,
+            )
+
+    def _on_retry_last(self) -> None:
+        if self._transcriber.retry_last():
+            _log.info("Retrying last transcription")
+            self._overlay.show_state(OverlayState.TRANSCRIBING)
+            self._timeout_was_cuda_retry = False
+            self._start_transcription_watchdog()
+            self._set_retry_action_enabled(False)
+        else:
+            _log.warning("No audio available for retry")
 
     def _on_autostart_toggled(self, checked: bool) -> None:
         if checked:
@@ -365,13 +433,17 @@ class App:
 
     def _cleanup(self) -> None:
         _log.info("spkup shutting down")
-        if self._recording_start_timer.isActive():
-            self._recording_start_timer.stop()
         self._recording_start_pending = False
+        watchdog = getattr(self, "_transcription_watchdog", None)
         self._recording_active = False
         self._recorder.stop()
+        transcriber = getattr(self, "_transcriber", None)
+        if transcriber is not None:
+            transcriber.cleanup_worker()
         self._restore_playback_mute()
-        self._listener.stop()
+        listener = getattr(self, "_listener", None)
+        if listener is not None:
+            listener.stop()
 
     def run(self) -> int:
         return self._app.exec()

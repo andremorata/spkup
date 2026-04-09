@@ -17,18 +17,21 @@ class OverlayState(Enum):
     RECORDING = "recording"
     TRANSCRIBING = "transcribing"
     DONE = "done"
+    ERROR = "error"
 
 
 _STATE_COLORS: dict[OverlayState, str] = {
     OverlayState.RECORDING: "#A11E1B",
     OverlayState.TRANSCRIBING: "#FB8A00",
     OverlayState.DONE: "#0EE367",
+    OverlayState.ERROR: "#E53935",
 }
 
 _STATE_LABELS: dict[OverlayState, str] = {
     OverlayState.RECORDING:    "Capturing",
     OverlayState.TRANSCRIBING: "Transcribing",
     OverlayState.DONE:         "Copied",
+    OverlayState.ERROR:        "Failed",
 }
 
 
@@ -104,6 +107,8 @@ class OverlayWidget(QWidget):
             self._pill_opacity_val = 1.0
             if state == OverlayState.DONE:
                 self._hide_timer.start(1500)
+            elif state == OverlayState.ERROR:
+                self._hide_timer.start(4000)
 
     # ---------- Internals ----------
 

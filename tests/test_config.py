@@ -63,3 +63,24 @@ def test_save_creates_directory(tmp_path, monkeypatch):
     save(AppConfig())
 
     assert cfg_path.exists()
+
+
+def test_default_transcription_timeout_seconds() -> None:
+    """AppConfig() has transcription_timeout_seconds == 300 by default."""
+    assert AppConfig().transcription_timeout_seconds == 300
+
+
+def test_load_returns_default_timeout_when_key_missing(tmp_path, monkeypatch) -> None:
+    """load() returns 300 when the config file does not contain the key."""
+    cfg_dir = tmp_path / "spkup"
+    cfg_dir.mkdir(parents=True)
+    cfg_path = cfg_dir / "config.json"
+    monkeypatch.setattr("spkup.config.CONFIG_DIR", cfg_dir)
+    monkeypatch.setattr("spkup.config.CONFIG_PATH", cfg_path)
+
+    data = {"hotkey": "f9", "model_size": "base"}
+    cfg_path.write_text(json.dumps(data), encoding="utf-8")
+
+    result = load()
+
+    assert result.transcription_timeout_seconds == 300

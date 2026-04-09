@@ -10,9 +10,10 @@ class AppConfig:
     hotkey: str = "ctrl+shift+space"
     model_size: str = "large-v3"
     device: str = "cuda"
-    compute_type: str = "float16"
+    compute_type: str = "int8"
     overlay_position: str = "bottom-right"
     max_recording_seconds: int = 120
+    transcription_timeout_seconds: int = 300
     mute_playback_while_recording: bool = False
 
 

@@ -125,6 +125,36 @@ Explicit Phase 8 extension:
 
 **Acceptance criterion:** Implementation and automated coverage are in place, but manual Windows validation is still pending: `pytest tests/test_playback_mute.py tests/test_app_playback_mute.py -q` passes and the full local suite rerun `.venv\Scripts\python -m pytest tests\ -q` exits 0. Manual validation is still required for the actual playback endpoint behavior: with the setting enabled, playback output should be muted only while capture is active; stopping capture should restore the exact pre-capture mute state; quick-tap toggle recording should follow the same mute and restore behavior; failure or app quit during active capture should not leave the machine muted. (AC-8.6)
 
+### Task 8.7 — Reliable synthesized sound cues
+
+**Deliverable:** `src/spkup/sound_cues.py`, updated `src/spkup/app.py`, `tests/test_sound_cues.py`
+
+- [x] Replace `winsound.Beep()` cue playback with precomputed PCM cues played via `sounddevice.play(..., blocking=False)`
+- [x] Precompute `start`, `transcribing`, and `done` cues at module import time with 5 ms fade envelopes
+- [x] Expose `START_CUE_DURATION_MS` for the record-start mute delay path in `app.py`
+- [x] Handle `sounddevice.PortAudioError` by logging a warning and skipping playback without crashing the app
+- [x] Add unit coverage for cue generation, cue lengths, invalid cue names, and PortAudio playback failures
+
+**Acceptance criterion:** `pytest tests/test_sound_cues.py -q` passes. Manual Windows validation is still required to confirm the cues remain audible when the output device was previously idle. (AC-8.7)
+
+### Task 8.8 — Transcription resilience (watchdog, retry, error UX)
+
+**Deliverable:** Updated `transcriber.py`, `app.py`, `overlay.py`, `config.py`, new `tests/test_transcription_resilience.py`
+
+- [x] Add `transcription_timeout_seconds` (default 300) to `AppConfig`
+- [x] Add `ERROR` overlay state (red "Failed" pill, 4s auto-hide)
+- [x] Add audio retention in `Transcriber` for retry after failure/timeout
+- [x] Add `retry_last(force_cpu=True)` method and `has_pending_retry` property
+- [x] Add `cleanup_worker()` method for forcible worker termination
+- [x] Add enhanced diagnostic logging with timing at model load, inference start/end
+- [x] Add watchdog `QTimer` in `App` that detects hung transcription
+- [x] Auto-retry on CPU when CUDA transcription times out
+- [x] Show `OverlayState.ERROR` on transcription failure (not just hide)
+- [x] Add "Retry last transcription" tray menu action
+- [x] Unit and integration tests (15 new tests, 89/89 total pass)
+
+**Acceptance criterion:** Automated test coverage is in place. Manual validation is pending: simulate a hung transcription (or set timeout very low) and verify the ERROR overlay appears, auto-retry fires on CPU, and the "Retry last transcription" tray action works. (AC-8.8)
+
 ---
 
 ## Acceptance Criteria
@@ -137,3 +167,5 @@ Explicit Phase 8 extension:
 | AC-8.4 | First-run dialog opens on fresh install | Delete config and model; relaunch; dialog appears |
 | AC-8.5 | Recent-history window manages the last 5 session transcriptions | Perform 6 transcriptions; open tray action; verify copy and delete actions. Not manually validated in this session. |
 | AC-8.6 | Playback output is muted only during active capture and the prior mute state is always restored | Enable the setting; verify hold and quick-tap capture mute behavior; stop capture and confirm the previous mute state returns; repeat with a forced failure or app quit during capture. |
+| AC-8.7 | Sound cues use synthesized PCM playback instead of `winsound.Beep()` and fail safely when audio playback is unavailable | `pytest tests/test_sound_cues.py -q` passes; on Windows, verify cues remain audible even when the output device was idle before recording starts. |
+| AC-8.8 | Transcription watchdog, automatic CPU retry, ERROR overlay, and manual retry tray action all function correctly | Set `transcription_timeout_seconds` to a low value; trigger a transcription; verify timeout detection, auto-CPU-retry, ERROR overlay on final failure, and tray retry action |
