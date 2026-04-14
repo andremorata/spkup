@@ -90,7 +90,13 @@ class App(QObject):
         # Core components
         self._recorder = AudioRecorder(max_seconds=self._config.max_recording_seconds)
         self._transcriber = Transcriber(self._config)
-        self._overlay = OverlayWidget(self._config.overlay_position)
+        self._overlay = OverlayWidget(
+            self._config.overlay_position,
+            recording_animation=self._config.recording_animation,
+            transcribing_animation=self._config.transcribing_animation,
+            done_animation=self._config.done_animation,
+            error_animation=self._config.error_animation,
+        )
         self._playback_mute = PlaybackMuteController()
         self._session_ready.connect(self._begin_recording_session)
         self._transcription_watchdog = QTimer()
@@ -225,6 +231,20 @@ class App(QObject):
         if old.overlay_position != new_config.overlay_position:
             self._overlay._overlay_position = new_config.overlay_position
             self._overlay._reposition()
+
+        # Update animation selections
+        self._overlay.set_animation_key(
+            OverlayState.RECORDING, new_config.recording_animation
+        )
+        self._overlay.set_animation_key(
+            OverlayState.TRANSCRIBING, new_config.transcribing_animation
+        )
+        self._overlay.set_animation_key(
+            OverlayState.DONE, new_config.done_animation
+        )
+        self._overlay.set_animation_key(
+            OverlayState.ERROR, new_config.error_animation
+        )
 
         # First-run: activate listener once a model is confirmed downloaded
         if not self._listener_active and is_downloaded(new_config.model_size):

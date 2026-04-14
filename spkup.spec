@@ -1,7 +1,7 @@
 """PyInstaller baseline for building the Windows spkup release artifact.
 
 Build command:
-    pyinstaller --clean spkup.spec
+    pyinstaller --clean -y spkup.spec
 
 This baseline targets the current frozen Windows release contract: a practical
 onedir build that can be zipped and attached to a release.

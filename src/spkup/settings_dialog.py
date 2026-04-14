@@ -3,8 +3,8 @@ from __future__ import annotations
 import dataclasses
 from typing import cast
 
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QFocusEvent, QKeyEvent, QStandardItemModel
+from PyQt6.QtCore import QRect, Qt, QTimer, pyqtSignal
+from PyQt6.QtGui import QColor, QFocusEvent, QFont, QKeyEvent, QPaintEvent, QPainter, QStandardItemModel
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QProgressDialog,
     QPushButton,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -22,6 +23,7 @@ from PyQt6.QtWidgets import (
 from spkup.config import AppConfig, save
 from spkup.hotkey import parse_hotkey
 from spkup.model_manager import _ModelDownloadWorker, is_downloaded
+from spkup.overlay import OverlayState, _STATE_COLORS
 
 
 def _detect_cuda() -> bool:
@@ -136,9 +138,96 @@ class HotkeyEdit(QLineEdit):
 
 _MODELS = ["tiny", "base", "small", "medium", "large-v2", "large-v3"]
 
+_PILL_W, _PILL_H = 160, 44
+_CORNER_RADIUS = 6
+_ICON_ZONE = 36
+
+_ANIM_STATE_ORDER = [
+    OverlayState.RECORDING,
+    OverlayState.TRANSCRIBING,
+    OverlayState.DONE,
+    OverlayState.ERROR,
+]
+_ANIM_CONFIG_FIELD: dict[OverlayState, str] = {
+    OverlayState.RECORDING: "recording_animation",
+    OverlayState.TRANSCRIBING: "transcribing_animation",
+    OverlayState.DONE: "done_animation",
+    OverlayState.ERROR: "error_animation",
+}
+_STATE_LABELS_UI: dict[OverlayState, str] = {
+    OverlayState.RECORDING: "Recording",
+    OverlayState.TRANSCRIBING: "Transcribing",
+    OverlayState.DONE: "Done",
+    OverlayState.ERROR: "Error",
+}
+
+
+class AnimationPreviewWidget(QWidget):
+    """Small 160×44 mini-pill that previews an animation."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setFixedSize(_PILL_W, _PILL_H)
+        self._state: OverlayState = OverlayState.RECORDING
+        self._animation: object | None = None
+        self._label = "Capturing"
+        self._color_hex = _STATE_COLORS[OverlayState.RECORDING]
+
+    def preview(self, state: OverlayState, key: str) -> None:
+        """Start previewing animation *key* for *state*."""
+        from spkup.animations import get_animation
+        from spkup.overlay import _STATE_LABELS
+
+        # Cleanup previous
+        if self._animation is not None:
+            self._animation.cleanup()  # type: ignore[attr-defined]
+            self._animation = None
+
+        self._state = state
+        self._color_hex = _STATE_COLORS.get(state, "#999999")
+        self._label = _STATE_LABELS.get(state, "")
+        self._animation = get_animation(state, key)
+        self._animation.start(self)  # type: ignore[attr-defined]
+        self.update()
+
+    def stop_preview(self) -> None:
+        if self._animation is not None:
+            self._animation.cleanup()  # type: ignore[attr-defined]
+            self._animation = None
+        self.update()
+
+    def paintEvent(self, a0: QPaintEvent | None) -> None:
+        anim = self._animation
+        opacity = getattr(anim, "opacity", 1.0)
+
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setOpacity(opacity)
+
+        bg = QColor(self._color_hex)
+        p.setBrush(bg)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.drawRoundedRect(self.rect(), _CORNER_RADIUS, _CORNER_RADIUS)
+
+        layout = getattr(anim, "layout_mode", "full") if anim else "full"
+        if layout == "icon" and anim is not None:
+            icon_rect = QRect(4, 4, _ICON_ZONE, _PILL_H - 8)
+            anim.paint(p, icon_rect)  # type: ignore[attr-defined]
+            text_rect = QRect(_ICON_ZONE + 4, 0, _PILL_W - _ICON_ZONE - 8, _PILL_H)
+        else:
+            text_rect = self.rect()
+            if anim is not None:
+                anim.paint(p, self.rect())  # type: ignore[attr-defined]
+
+        p.setPen(QColor("#ffffff"))
+        font = QFont("Segoe UI", 10, QFont.Weight.Bold)
+        p.setFont(font)
+        p.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, self._label)
+        p.end()
+
 
 class SettingsDialog(QDialog):
-    """Settings dialog for hotkey, model, device, and overlay position."""
+    """Settings dialog for hotkey, model, device, overlay position, and animations."""
 
     settings_saved = pyqtSignal(object)  # AppConfig
 
@@ -167,16 +256,25 @@ class SettingsDialog(QDialog):
             )
             main_layout.addWidget(banner)
 
+        # ── Tab widget ───────────────────────────────────────────────────
+        tabs = QTabWidget()
+        main_layout.addWidget(tabs)
+
+        # ═══════════════ General tab ═══════════════
+        general_tab = QWidget()
+        gen_layout = QVBoxLayout(general_tab)
+        gen_layout.setSpacing(12)
+
         # ── Hotkey ──────────────────────────────────────────────────────────
         self._hotkey_edit = HotkeyEdit(config.hotkey)
         self._hotkey_edit.hotkey_changed.connect(
             lambda v: setattr(self._config, "hotkey", v)
         )
-        main_layout.addWidget(QLabel("Hotkey"))
-        main_layout.addWidget(self._hotkey_edit)
+        gen_layout.addWidget(QLabel("Hotkey"))
+        gen_layout.addWidget(self._hotkey_edit)
 
         # ── Model ────────────────────────────────────────────────────────────
-        main_layout.addWidget(QLabel("Model size"))
+        gen_layout.addWidget(QLabel("Model size"))
         model_row = QWidget()
         model_row_layout = QHBoxLayout(model_row)
         model_row_layout.setContentsMargins(0, 0, 0, 0)
@@ -195,10 +293,10 @@ class SettingsDialog(QDialog):
 
         model_row_layout.addWidget(self._model_combo, 1)
         model_row_layout.addWidget(self._download_btn)
-        main_layout.addWidget(model_row)
+        gen_layout.addWidget(model_row)
 
         # ── Device ───────────────────────────────────────────────────────────
-        main_layout.addWidget(QLabel("Device"))
+        gen_layout.addWidget(QLabel("Device"))
         self._device_combo = QComboBox()
         self._device_combo.addItems(["cuda", "cpu"])
         has_cuda = _detect_cuda()
@@ -214,30 +312,17 @@ class SettingsDialog(QDialog):
         self._device_combo.currentTextChanged.connect(
             lambda v: setattr(self._config, "device", v)
         )
-        main_layout.addWidget(self._device_combo)
+        gen_layout.addWidget(self._device_combo)
 
         # ── Compute type ─────────────────────────────────────────────────────
-        main_layout.addWidget(QLabel("Compute type"))
+        gen_layout.addWidget(QLabel("Compute type"))
         self._compute_combo = QComboBox()
         self._compute_combo.addItems(["float16", "int8", "float32"])
         self._compute_combo.setCurrentText(config.compute_type)
         self._compute_combo.currentTextChanged.connect(
             lambda v: setattr(self._config, "compute_type", v)
         )
-        main_layout.addWidget(self._compute_combo)
-
-        # ── Overlay position ─────────────────────────────────────────────────
-        main_layout.addWidget(QLabel("Overlay position"))
-        self._overlay_combo = QComboBox()
-        self._overlay_combo.addItems(
-            ["bottom-right", "bottom-center", "bottom-left",
-             "top-right", "top-center", "top-left"]
-        )
-        self._overlay_combo.setCurrentText(config.overlay_position)
-        self._overlay_combo.currentTextChanged.connect(
-            lambda v: setattr(self._config, "overlay_position", v)
-        )
-        main_layout.addWidget(self._overlay_combo)
+        gen_layout.addWidget(self._compute_combo)
 
         # ── Playback ──────────────────────────────────────────────────────────
         self._mute_playback_checkbox = QCheckBox("Mute playback while recording")
@@ -254,7 +339,78 @@ class SettingsDialog(QDialog):
                 checked,
             )
         )
-        main_layout.addWidget(self._mute_playback_checkbox)
+        gen_layout.addWidget(self._mute_playback_checkbox)
+        gen_layout.addStretch()
+
+        tabs.addTab(general_tab, "General")
+
+        # ═══════════════ Overlay tab ═══════════════
+        overlay_tab = QWidget()
+        ovl_layout = QVBoxLayout(overlay_tab)
+        ovl_layout.setSpacing(12)
+
+        # ── Overlay position ─────────────────────────────────────────────────
+        ovl_layout.addWidget(QLabel("Overlay position"))
+        self._overlay_combo = QComboBox()
+        self._overlay_combo.addItems(
+            ["bottom-right", "bottom-center", "bottom-left",
+             "top-right", "top-center", "top-left"]
+        )
+        self._overlay_combo.setCurrentText(config.overlay_position)
+        self._overlay_combo.currentTextChanged.connect(
+            lambda v: setattr(self._config, "overlay_position", v)
+        )
+        ovl_layout.addWidget(self._overlay_combo)
+
+        # ── Animation combos ─────────────────────────────────────────────────
+        from spkup.animations import get_display_name, get_keys_for_state
+
+        self._anim_combos: dict[OverlayState, QComboBox] = {}
+        for state in _ANIM_STATE_ORDER:
+            label = _STATE_LABELS_UI[state]
+            ovl_layout.addWidget(QLabel(f"{label} animation"))
+            combo = QComboBox()
+            keys = get_keys_for_state(state)
+            current_key = getattr(config, _ANIM_CONFIG_FIELD[state])
+            for k in keys:
+                combo.addItem(get_display_name(state, k), k)
+            # Select current
+            for i in range(combo.count()):
+                if combo.itemData(i) == current_key:
+                    combo.setCurrentIndex(i)
+                    break
+            combo.currentIndexChanged.connect(
+                lambda _idx, s=state, c=combo: self._on_anim_combo_changed(s, c)
+            )
+            ovl_layout.addWidget(combo)
+            self._anim_combos[state] = combo
+
+        # ── Preview ──────────────────────────────────────────────────────────
+        ovl_layout.addSpacing(8)
+        preview_label = QLabel("Preview")
+        preview_label.setStyleSheet("font-weight:bold;")
+        ovl_layout.addWidget(preview_label)
+
+        preview_row = QWidget()
+        preview_layout = QHBoxLayout(preview_row)
+        preview_layout.setContentsMargins(0, 0, 0, 0)
+
+        self._preview_widget = AnimationPreviewWidget()
+        preview_layout.addWidget(self._preview_widget)
+        preview_layout.addStretch()
+
+        self._test_btn = QPushButton("Test")
+        self._test_btn.setToolTip("Cycle through all 4 states with current animation selections")
+        self._test_btn.clicked.connect(self._on_test)
+        preview_layout.addWidget(self._test_btn)
+
+        ovl_layout.addWidget(preview_row)
+        ovl_layout.addStretch()
+
+        tabs.addTab(overlay_tab, "Overlay")
+
+        # Start by previewing the recording animation
+        self._trigger_preview(OverlayState.RECORDING)
 
         # ── Buttons ───────────────────────────────────────────────────────────
         main_layout.addSpacing(8)
@@ -272,6 +428,41 @@ class SettingsDialog(QDialog):
         main_layout.addWidget(btn_row)
 
     # ---------- Slots --------------------------------------------------------
+
+    def _on_anim_combo_changed(self, state: OverlayState, combo: QComboBox) -> None:
+        key = combo.currentData()
+        field = _ANIM_CONFIG_FIELD[state]
+        setattr(self._config, field, key)
+        self._trigger_preview(state)
+
+    def _trigger_preview(self, state: OverlayState) -> None:
+        combo = self._anim_combos.get(state)
+        if combo is None:
+            return
+        key = combo.currentData()
+        if key:
+            self._preview_widget.preview(state, key)
+
+    def _on_test(self) -> None:
+        """Cycle through all 4 states with 1.2 s each."""
+        self._test_btn.setEnabled(False)
+        states = list(_ANIM_STATE_ORDER)
+        delay = 1200  # ms between states
+
+        def show_next(idx: int) -> None:
+            if idx >= len(states):
+                self._preview_widget.stop_preview()
+                self._test_btn.setEnabled(True)
+                # Return to recording preview
+                self._trigger_preview(OverlayState.RECORDING)
+                return
+            s = states[idx]
+            combo = self._anim_combos.get(s)
+            key = combo.currentData() if combo else "classic"
+            self._preview_widget.preview(s, key)
+            QTimer.singleShot(delay, lambda: show_next(idx + 1))
+
+        show_next(0)
 
     def _on_model_changed(self, index: int) -> None:
         model_size = self._model_combo.currentData()
@@ -310,6 +501,11 @@ class SettingsDialog(QDialog):
         QMessageBox.critical(self, "Download failed", msg)
 
     def _on_save(self) -> None:
+        self._preview_widget.stop_preview()
         save(self._config)
         self.settings_saved.emit(self._config)
         self.accept()
+
+    def reject(self) -> None:
+        self._preview_widget.stop_preview()
+        super().reject()

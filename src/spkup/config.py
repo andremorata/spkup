@@ -15,6 +15,10 @@ class AppConfig:
     max_recording_seconds: int = 120
     transcription_timeout_seconds: int = 300
     mute_playback_while_recording: bool = False
+    recording_animation: str = "equalizer_bars"
+    transcribing_animation: str = "spinning_arc"
+    done_animation: str = "checkmark_draw"
+    error_animation: str = "shake"
 
 
 CONFIG_DIR = Path(os.environ["APPDATA"]) / "spkup"
