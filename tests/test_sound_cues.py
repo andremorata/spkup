@@ -27,9 +27,7 @@ def test_precomputed_cues_have_expected_shape_and_length() -> None:
     assert sound_cues.done.dtype == np.float32
 
     assert len(sound_cues.start) == int(round(0.120 * 44100)) + int(round(0.230 * 44100))
-    assert len(sound_cues.transcribing) == int(round(0.070 * 44100)) * 2 + int(
-        round(0.025 * 44100)
-    )
+    assert len(sound_cues.transcribing) == int(round(0.150 * 44100))
     assert len(sound_cues.done) == int(round(0.090 * 44100)) + int(
         round(0.120 * 44100)
     )

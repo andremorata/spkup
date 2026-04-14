@@ -65,9 +65,7 @@ start = np.ascontiguousarray(
 transcribing = np.ascontiguousarray(
     np.concatenate(
         (
-            _generate_tone(700.0, 0.070),
-            _silence(0.025),
-            _generate_tone(700.0, 0.070),
+            _generate_sweep(1200.0, 100.0, 0.150),
         )
     ).astype(np.float32, copy=False)
 )
