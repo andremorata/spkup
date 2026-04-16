@@ -19,6 +19,7 @@ class AppConfig:
     transcribing_animation: str = "spinning_arc"
     done_animation: str = "checkmark_draw"
     error_animation: str = "shake"
+    input_device: dict | None = None
 
 
 CONFIG_DIR = Path(os.environ["APPDATA"]) / "spkup"

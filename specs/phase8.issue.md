@@ -21,6 +21,7 @@ Explicit Phase 8 extension:
 
 - Recent transcription history was added to Phase 8 on 2026-04-01 and is in scope for this phase only.
 - Temporary playback muting during capture was added to Phase 8 on 2026-04-07 and is in scope for this phase only.
+- Microphone input device selection (tray submenu + settings combo) and empty-transcription detection were added to Phase 8 on 2026-04-16 and are in scope for this phase only. See Task 8.9.
 
 ---
 
@@ -157,6 +158,25 @@ Explicit Phase 8 extension:
 
 ---
 
+### Task 8.9 — Microphone input selection + empty-transcription detection
+
+Added 2026-04-16 as an explicit Phase 8 scope extension. Addresses two closely related gaps: (A) the app always records from the system default input, with no way for the user to pick a different mic, and (B) when a recording produces an empty transcription (wrong mic, mic muted at the OS level, mic unplugged), the app silently overwrites the clipboard with an empty string and shows a false DONE overlay — giving the user no signal that something went wrong.
+
+**Deliverable:** New `src/spkup/audio_devices.py`; `config.py` gains `input_device` field; `recorder.py` gains `set_device()`; `app.py` wires the device through startup / settings / a new tray submenu, and rewrites `_on_transcription_finished` to detect "long recording → empty text"; `settings_dialog.py` gains a Microphone `QComboBox`; new `tests/test_audio_devices.py` + `tests/test_app_empty_transcription.py`; extended `tests/test_config.py` and `tests/test_recorder.py`.
+
+- [x] Add `input_device: dict | None = None` to `AppConfig`; persist as `{"name": str, "hostapi": str}` so device identity survives reboot, reorder, and hostapi ambiguity. `None` means "system default"
+- [x] Add `audio_devices.list_input_devices() / resolve_device(spec) / describe(spec) / spec_from_device(dev)` utilities; filter `max_input_channels > 0`; fall back to system default when the saved device is no longer present
+- [x] Add `AudioRecorder.set_device(device)` — takes effect on the next `start()` call (sounddevice has no hot-swap)
+- [x] `app.py`: pass resolved device to `AudioRecorder` at startup; add **Microphone** tray submenu with "System default" + per-device entries, rebuilt on `aboutToShow` so hotplug is reflected; re-apply device on settings save
+- [x] `settings_dialog.py`: add **Microphone** `QComboBox` above the existing "Device" (GPU/CPU) combo on the General tab
+- [x] Capture recording duration via a new slot on `recorder.recording_finished` (connected before the transcriber so it runs first)
+- [x] Rework `_on_transcription_finished`: if stripped text is empty AND duration ≥ 5 s → log warning, show `OverlayState.ERROR`, show tray balloon "spkup — No speech detected" prompting the user to check/switch mic; if empty AND duration < 5 s → silent DONE overlay, no clipboard/history write; otherwise normal behaviour
+- [x] Tests: 32 targeted (config round-trip for `input_device`, `audio_devices` resolve + enumerate + describe, recorder `set_device`, empty-transcription UX branches). Full suite: 133/133 pass via `$env:PYTHONPATH='src'; .\.venv\Scripts\python -m pytest tests\ -q`
+
+**Acceptance criterion:** Automated test coverage is in place. Manual validation is pending: (1) open the tray Microphone submenu and confirm "System default" plus real devices are listed with the current one checked; change mic and confirm `config.json` now contains `"input_device": {"name": ..., "hostapi": ...}`. (2) Open Settings → Microphone, pick a different device, Save — same effect. (3) Hold the hotkey for ≥ 8 s with a muted or silent device; verify ERROR overlay + tray balloon "No speech detected — check your microphone"; confirm clipboard was NOT overwritten and history was NOT appended to. (4) Short (< 1 s) hotkey tap with no speech produces no warning and no history entry. (AC-8.9)
+
+---
+
 ## Acceptance Criteria
 
 | ID | Criterion | How To Verify |
@@ -169,3 +189,4 @@ Explicit Phase 8 extension:
 | AC-8.6 | Playback output is muted only during active capture and the prior mute state is always restored | Enable the setting; verify hold and quick-tap capture mute behavior; stop capture and confirm the previous mute state returns; repeat with a forced failure or app quit during capture. |
 | AC-8.7 | Sound cues use synthesized PCM playback instead of `winsound.Beep()` and fail safely when audio playback is unavailable | `pytest tests/test_sound_cues.py -q` passes; on Windows, verify cues remain audible even when the output device was idle before recording starts. |
 | AC-8.8 | Transcription watchdog, automatic CPU retry, ERROR overlay, and manual retry tray action all function correctly | Set `transcription_timeout_seconds` to a low value; trigger a transcription; verify timeout detection, auto-CPU-retry, ERROR overlay on final failure, and tray retry action |
+| AC-8.9 | User can pick the microphone from both tray and settings, and "long recording with no speech" surfaces a clear warning instead of a silent empty paste | Switch devices from tray and settings; verify `config.json` updates. Record ≥ 8 s on a muted/silent device → ERROR overlay + tray "No speech detected" balloon, no clipboard/history write. |

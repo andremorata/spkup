@@ -84,3 +84,38 @@ def test_load_returns_default_timeout_when_key_missing(tmp_path, monkeypatch) ->
     result = load()
 
     assert result.transcription_timeout_seconds == 300
+
+
+def test_input_device_defaults_to_none() -> None:
+    """AppConfig() has input_device == None (system default) by default."""
+    assert AppConfig().input_device is None
+
+
+def test_input_device_round_trips(tmp_path, monkeypatch) -> None:
+    """A stored input_device spec survives save() → load()."""
+    cfg_dir = tmp_path / "spkup"
+    cfg_path = cfg_dir / "config.json"
+    monkeypatch.setattr("spkup.config.CONFIG_DIR", cfg_dir)
+    monkeypatch.setattr("spkup.config.CONFIG_PATH", cfg_path)
+
+    spec = {"name": "USB Headset Mic", "hostapi": "Windows WASAPI"}
+    cfg = AppConfig(input_device=spec)
+    save(cfg)
+    loaded = load()
+
+    assert loaded.input_device == spec
+
+
+def test_load_missing_input_device_falls_back_to_none(tmp_path, monkeypatch) -> None:
+    """Older config.json files without input_device load cleanly as None."""
+    cfg_dir = tmp_path / "spkup"
+    cfg_dir.mkdir(parents=True)
+    cfg_path = cfg_dir / "config.json"
+    monkeypatch.setattr("spkup.config.CONFIG_DIR", cfg_dir)
+    monkeypatch.setattr("spkup.config.CONFIG_PATH", cfg_path)
+
+    cfg_path.write_text(json.dumps({"hotkey": "f9"}), encoding="utf-8")
+
+    result = load()
+
+    assert result.input_device is None

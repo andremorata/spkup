@@ -20,6 +20,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from spkup.audio_devices import list_input_devices, spec_from_device
 from spkup.config import AppConfig, save
 from spkup.hotkey import parse_hotkey
 from spkup.model_manager import _ModelDownloadWorker, is_downloaded
@@ -294,6 +295,32 @@ class SettingsDialog(QDialog):
         model_row_layout.addWidget(self._model_combo, 1)
         model_row_layout.addWidget(self._download_btn)
         gen_layout.addWidget(model_row)
+
+        # ── Microphone ───────────────────────────────────────────────────────
+        gen_layout.addWidget(QLabel("Microphone"))
+        self._mic_combo = QComboBox()
+        self._mic_combo.addItem("System default", None)
+        current_mic = config.input_device
+        selected_idx = 0
+        for i, dev in enumerate(list_input_devices(), start=1):
+            label = f"{dev['name']} ({dev['hostapi']})"
+            if dev["is_default"]:
+                label += "  • default"
+            spec = spec_from_device(dev)
+            self._mic_combo.addItem(label, spec)
+            if (
+                current_mic is not None
+                and current_mic.get("name") == spec["name"]
+                and current_mic.get("hostapi") == spec["hostapi"]
+            ):
+                selected_idx = i
+        self._mic_combo.setCurrentIndex(selected_idx)
+        self._mic_combo.currentIndexChanged.connect(
+            lambda idx: setattr(
+                self._config, "input_device", self._mic_combo.itemData(idx)
+            )
+        )
+        gen_layout.addWidget(self._mic_combo)
 
         # ── Device ───────────────────────────────────────────────────────────
         gen_layout.addWidget(QLabel("Device"))

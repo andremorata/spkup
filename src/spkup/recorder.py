@@ -23,6 +23,15 @@ class AudioRecorder(QObject):
         self._timer.setSingleShot(True)
         self._timer.timeout.connect(self._on_safety_timeout)
 
+    def set_device(self, device) -> None:
+        """Select the PortAudio input device for the next recording.
+
+        Passing `None` restores the system default. sounddevice does not
+        support hot-swapping a running stream, so the change applies on
+        the next `start()` call.
+        """
+        self._device = device
+
     def start(self):
         if self._stream is not None:
             return

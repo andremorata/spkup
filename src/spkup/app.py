@@ -1,15 +1,18 @@
+import dataclasses
 import logging
 import sys
 import threading
 from typing import cast
 
 from PyQt6.QtCore import Qt, QRect, QRectF, QTimer, QObject, pyqtSignal
-from PyQt6.QtGui import QAction, QBrush, QColor, QIcon, QPainter, QPen, QPixmap
+from PyQt6.QtGui import QAction, QActionGroup, QBrush, QColor, QIcon, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
+from spkup.audio_devices import describe as describe_device
+from spkup.audio_devices import list_input_devices, resolve_device, spec_from_device
 from spkup.autostart import disable_autostart, enable_autostart, is_autostart_enabled
 from spkup.clipboard import copy_to_clipboard
-from spkup.config import AppConfig, CONFIG_PATH, load
+from spkup.config import AppConfig, CONFIG_PATH, load, save
 from spkup.hotkey import HotkeyListener
 from spkup.model_manager import is_downloaded
 from spkup.overlay import OverlayState, OverlayWidget
@@ -21,6 +24,11 @@ from spkup.transcription_history_window import TranscriptionHistoryWindow
 from spkup.transcriber import Transcriber
 
 _log = logging.getLogger(__name__)
+
+# Minimum recording length (seconds) above which an empty transcription is
+# treated as a likely mic problem and surfaced to the user. Shorter empties
+# are silently ignored so accidental hotkey taps do not spam warnings.
+EMPTY_WARNING_THRESHOLD_S = 5.0
 
 
 def _make_tray_icon(size: int = 64, color: str = "#ffffff") -> QIcon:
@@ -88,7 +96,11 @@ class App(QObject):
         self._recording_active = False
 
         # Core components
-        self._recorder = AudioRecorder(max_seconds=self._config.max_recording_seconds)
+        self._recorder = AudioRecorder(
+            device=resolve_device(self._config.input_device),
+            max_seconds=self._config.max_recording_seconds,
+        )
+        self._last_recording_duration: float = 0.0
         self._transcriber = Transcriber(self._config)
         self._overlay = OverlayWidget(
             self._config.overlay_position,
@@ -113,6 +125,9 @@ class App(QObject):
         )
 
         # Recorder → transcription pipeline
+        # Duration capture runs first so _on_transcription_finished can judge
+        # whether an empty result followed a substantial recording.
+        self._recorder.recording_finished.connect(self._capture_recording_duration)
         self._recorder.recording_finished.connect(self._transcriber.transcribe)
         self._recorder.recording_error.connect(self._on_recording_error)
 
@@ -150,6 +165,10 @@ class App(QObject):
         )
         self._retry_action.setEnabled(False)
         self._retry_action.triggered.connect(self._on_retry_last)
+        self._menu.addSeparator()
+        self._mic_menu = cast(QMenu, self._menu.addMenu("Microphone"))
+        self._mic_action_group: QActionGroup | None = None
+        self._mic_menu.aboutToShow.connect(self._rebuild_mic_menu)
         self._menu.addSeparator()
         quit_action = self._menu.addAction("Quit")
         assert quit_action is not None
@@ -227,6 +246,14 @@ class App(QObject):
             )
             self._transcriber.transcription_error.connect(self._on_transcription_error)
 
+        # Update input device if changed
+        if old.input_device != new_config.input_device:
+            self._recorder.set_device(resolve_device(new_config.input_device))
+            _log.info(
+                "Input device changed via settings: %s",
+                describe_device(new_config.input_device),
+            )
+
         # Reposition overlay if corner changed
         if old.overlay_position != new_config.overlay_position:
             self._overlay._overlay_position = new_config.overlay_position
@@ -259,7 +286,69 @@ class App(QObject):
                     4000,
                 )
 
+    # ---------- Microphone submenu -------------------------------------------
+
+    def _rebuild_mic_menu(self) -> None:
+        """Repopulate the tray microphone submenu.
+
+        Called on `aboutToShow` so hot-plugged devices appear the next time
+        the user opens the menu.
+        """
+        self._mic_menu.clear()
+        self._mic_action_group = QActionGroup(self._mic_menu)
+        self._mic_action_group.setExclusive(True)
+
+        current = self._config.input_device
+
+        default_action = self._mic_menu.addAction("System default")
+        assert default_action is not None
+        default_action.setCheckable(True)
+        default_action.setChecked(current is None)
+        default_action.triggered.connect(lambda _=False: self._on_mic_selected(None))
+        self._mic_action_group.addAction(default_action)
+
+        devices = list_input_devices()
+        if not devices:
+            placeholder = self._mic_menu.addAction("(no input devices found)")
+            assert placeholder is not None
+            placeholder.setEnabled(False)
+            return
+
+        self._mic_menu.addSeparator()
+        for dev in devices:
+            spec = spec_from_device(dev)
+            label = f"{dev['name']} ({dev['hostapi']})"
+            if dev["is_default"]:
+                label += "  • default"
+            action = self._mic_menu.addAction(label)
+            assert action is not None
+            action.setCheckable(True)
+            is_current = (
+                current is not None
+                and current.get("name") == spec["name"]
+                and current.get("hostapi") == spec["hostapi"]
+            )
+            action.setChecked(is_current)
+            action.triggered.connect(
+                lambda _checked=False, s=spec: self._on_mic_selected(s)
+            )
+            self._mic_action_group.addAction(action)
+
+    def _on_mic_selected(self, spec: dict | None) -> None:
+        if self._config.input_device == spec:
+            return
+        self._config = dataclasses.replace(self._config, input_device=spec)
+        save(self._config)
+        self._recorder.set_device(resolve_device(spec))
+        _log.info("Input device changed: %s", describe_device(spec))
+
     # ---------- Recording lifecycle ------------------------------------------
+
+    def _capture_recording_duration(self, audio) -> None:
+        try:
+            self._last_recording_duration = len(audio) / 16000.0
+        except Exception:
+            self._last_recording_duration = 0.0
 
     def _begin_recording_session(self) -> None:
         if not self._recording_start_pending:
@@ -377,9 +466,38 @@ class App(QObject):
 
     def _on_transcription_finished(self, text: str) -> None:
         self._stop_transcription_watchdog()
-        _log.info("Transcription finished: %d chars", len(text))
-        copy_to_clipboard(text)
-        entry = self._transcription_history.add(text)
+        stripped = text.strip()
+        duration = self._last_recording_duration
+        _log.info(
+            "Transcription finished: %d chars (duration=%.1fs)",
+            len(stripped), duration,
+        )
+
+        if not stripped:
+            # Do not overwrite clipboard with an empty string or push an
+            # empty entry into history. Warn only when the recording was
+            # long enough that the user plainly tried to say something.
+            if duration >= EMPTY_WARNING_THRESHOLD_S:
+                _log.warning(
+                    "Empty transcription after %.1fs of audio — likely mic issue",
+                    duration,
+                )
+                self._overlay.show_state(OverlayState.ERROR)
+                if QSystemTrayIcon.supportsMessages():
+                    self._tray.showMessage(
+                        "spkup — No speech detected",
+                        "Nothing was transcribed. Check that the correct "
+                        "microphone is selected and not muted.",
+                        QSystemTrayIcon.MessageIcon.Warning,
+                        4000,
+                    )
+            else:
+                self._overlay.show_state(OverlayState.DONE)
+            self._set_retry_action_enabled(False)
+            return
+
+        copy_to_clipboard(stripped)
+        entry = self._transcription_history.add(stripped)
         _log.info("Added transcription history entry id=%s", entry.id)
         self._transcription_history_window.set_entries(
             self._transcription_history.list_entries()

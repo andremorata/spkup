@@ -64,3 +64,33 @@ def test_array_dtype_is_float32():
 
     assert len(received) == 1
     assert received[0].dtype == np.float32
+
+
+def test_set_device_is_used_on_next_start():
+    """set_device() updates the device passed to the next InputStream."""
+    recorder = AudioRecorder()
+    recorder.set_device(7)
+
+    fake_stream = MagicMock()
+    with patch(
+        "spkup.recorder.sounddevice.InputStream", return_value=fake_stream
+    ) as mk:
+        recorder.start()
+        recorder.stop()
+
+    assert mk.call_args.kwargs["device"] == 7
+
+
+def test_set_device_none_restores_default():
+    """set_device(None) means 'system default' — passed straight to sounddevice."""
+    recorder = AudioRecorder(device=3)
+    recorder.set_device(None)
+
+    fake_stream = MagicMock()
+    with patch(
+        "spkup.recorder.sounddevice.InputStream", return_value=fake_stream
+    ) as mk:
+        recorder.start()
+        recorder.stop()
+
+    assert mk.call_args.kwargs["device"] is None

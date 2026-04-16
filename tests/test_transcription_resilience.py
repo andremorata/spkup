@@ -65,6 +65,11 @@ def _make_stub_app(
     app._transcription_history = history
     app._transcription_history_window = MagicMock()
 
+    # Recording duration is captured separately in production; default to a
+    # value above the empty-warning threshold so the non-empty happy path
+    # and resilience paths behave normally.
+    app._last_recording_duration = 10.0
+
     return app  # type: ignore[return-value]
 
 
