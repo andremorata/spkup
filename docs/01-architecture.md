@@ -24,6 +24,8 @@ spkup is a single-process Windows desktop application. There is no server, no da
 flowchart TD
     User([User]) -- holds/releases hotkey --> HK[HotkeyListener\npynput thread]
     HK -- recording_started\nrecording_stopped --> App[App\nQt main thread]
+  User -- single left-click tray icon --> TI[System Tray\nQSystemTrayIcon]
+  TI -- activated Trigger --> App
     App -- start / stop --> REC[AudioRecorder\nsounddevice]
     REC -- recording_finished\nnp.ndarray --> App
     App -- transcribe --> TR[Transcriber\nQObject facade]
@@ -38,7 +40,7 @@ flowchart TD
     App -- setText --> CB[Clipboard\nQApplication]
     HW -- copy selected --> CB
     App -- show_state --> OV[OverlayWidget\nframeless QWidget]
-    App -- showMessage --> TI[System Tray\nQSystemTrayIcon]
+    App -- showMessage / setIcon --> TI
     App -- load / save --> CFG[AppConfig\nconfig.json]
 ```
 
@@ -56,7 +58,7 @@ flowchart TD
 | `model_manager.py` | `ModelManager` | Cache dir management; `is_downloaded`; `_ModelDownloadWorker` for HuggingFace downloads |
 | `overlay.py` | `OverlayWidget` | Frameless always-on-top click-through widget; RECORDING / TRANSCRIBING / DONE states |
 | `clipboard.py` | `copy_to_clipboard` | `QApplication.clipboard().setText()` — Unicode-safe |
-| `app.py` | `App` | `QApplication` + `QSystemTrayIcon`; instantiates all components; wires all signals |
+| `app.py` | `App` | `QApplication` + `QSystemTrayIcon`; instantiates all components; wires all signals; owns tray click recording toggle and trigger suppression |
 | `settings_dialog.py` | `SettingsDialog` | Hotkey capture, model picker, device selector, overlay position, playback-mute toggle; reinitializes components on save |
 | `transcription_history.py` | `TranscriptionHistory` | Session-scoped in-memory store of the last 5 completed transcriptions |
 | `transcription_history.py` | `TranscriptionHistoryEntry` | Immutable history item with stable session-local id and text |
@@ -74,15 +76,25 @@ flowchart TD
 ```
 Hotkey held
   → HotkeyListener.recording_started
+    → App-level trigger suppression check
     → if AppConfig.mute_playback_while_recording: play start cue, then PlaybackMuteController.mute_for_recording()
     → AudioRecorder.start()
     → OverlayWidget.show_state(RECORDING)
 
 Hotkey released
   → HotkeyListener.recording_stopped
+    → App-level trigger suppression check (stop requests are always allowed while active)
     → AudioRecorder.stop()
     → PlaybackMuteController.restore()
     → OverlayWidget.show_state(TRANSCRIBING)
+
+Tray left-click
+  → QSystemTrayIcon.activated(Trigger)
+    → App toggles recording through the same start / stop request helpers used by the hotkey
+
+Recording stop / cancel / error / transcription finalize
+  → App arms a 1.0 s start-trigger suppression window
+    → redundant hotkey or tray start requests inside that window are ignored
 
 AudioRecorder.recording_finished(audio: np.ndarray)
   → Transcriber.transcribe(audio)

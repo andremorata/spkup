@@ -46,6 +46,7 @@ pytest
 | `autostart.py` | `tests/test_autostart.py` | Enable/disable/query with mocked `winreg` |
 | `playback_mute.py` | `tests/test_playback_mute.py` | Snapshot/restore behavior, already-muted path, backend failure handling, restore retry, re-entry guard |
 | `app.py` (playback-mute lifecycle) | `tests/test_app_playback_mute.py` | Begin-recording mute path, delayed-start no-op path, stop/error/cleanup restore behavior with mocked Qt-heavy dependencies |
+| `app.py` (tray toggle + trigger guards) | `tests/test_app_trigger_guards.py` | Tray activation reasons, shared start/stop request gating, redundant trigger suppression after cancel/error/finalize, legitimate stop while active |
 | `transcription_history.py` | `tests/test_transcription_history.py` | Add/list ordering, keep only last 5 entries, delete behavior, Unicode text, duplicate entries remain distinct |
 
 These are the checks that are suitable for repeatable automated execution. Today they are run locally with `pytest`; Phase 9 is planned to run the same class of checks in CI.
@@ -73,13 +74,14 @@ These modules involve Qt widget painting, hardware I/O, or CUDA inference — no
 | Module | Manual check |
 | --- | --- |
 | `overlay.py` | Visual inspection: three states show correct colours and labels; auto-hides after DONE |
-| `app.py` (tray) | Tray icon appears; right-click shows menu; **Recent transcriptions** opens the history window; Quit exits |
+| `app.py` (tray) | Tray icon appears; single left-click toggles recording; right-click shows menu; **Recent transcriptions** opens the history window; Quit exits |
 | `hotkey.py` (listener) | Hold hotkey emits started once; release emits stopped; no flooding |
 | `recorder.py` (stream) | Hold hotkey, speak, release → non-empty array shape printed to stdout |
 | `transcriber.py` | Audio captured → text transcribed correctly in PT and EN |
 | `settings_dialog.py` | Dialog opens; hotkey capture works; save writes to `config.json` |
 | `playback_mute.py` + recording flow | On Windows, enabling **Mute playback while recording** mutes only during active capture, restores the exact prior mute state on stop, restores after recording error or app quit, and behaves the same for hold-to-record and quick-tap toggle flows |
 | `transcription_history_window.py` | Window shows newest-first session entries; copy/delete act on the selected entry; close/reopen preserves session history while the app stays running |
+| `app.py` (trigger suppression) | On Windows, rapid repeated tray clicks or hotkey retriggers within 1 second after stop/cancel/error/finalize do not start extra recording/transcription work, and a legitimate stop while recording is active is never blocked |
 
 ---
 

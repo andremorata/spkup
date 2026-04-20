@@ -1,10 +1,11 @@
 # spkup
 
-Push-to-talk speech-to-text for Windows. Hold a hotkey, speak, release — transcribed text lands in your clipboard.
+Push-to-talk speech-to-text for Windows. Hold a hotkey or single-click the tray icon, speak, release or click again — transcribed text lands in your clipboard.
 
 Planned distribution note: Phase 9 defines the release contract and documentation baseline, but packaging and GitHub release automation are still to be implemented.
 
 - Global hotkey (configurable, default `Ctrl+Shift+Space`)
+- Single left-click tray icon toggle for record / stop
 - Local Whisper inference via [faster-whisper](https://github.com/SYSTRAN/faster-whisper) — no cloud, no API key
 - Mixed Portuguese + English support (auto-detect)
 - Always-on-top overlay with RECORDING / TRANSCRIBING / DONE states

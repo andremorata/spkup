@@ -22,6 +22,7 @@ Explicit Phase 8 extension:
 - Recent transcription history was added to Phase 8 on 2026-04-01 and is in scope for this phase only.
 - Temporary playback muting during capture was added to Phase 8 on 2026-04-07 and is in scope for this phase only.
 - Microphone input device selection (tray submenu + settings combo) and empty-transcription detection were added to Phase 8 on 2026-04-16 and are in scope for this phase only. See Task 8.9.
+- Tray single-click recording toggle and redundant trigger suppression were added to Phase 8 on 2026-04-20 and are in scope for this phase only. See Task 8.10.
 
 ---
 
@@ -190,3 +191,21 @@ Added 2026-04-16 as an explicit Phase 8 scope extension. Addresses two closely r
 | AC-8.7 | Sound cues use synthesized PCM playback instead of `winsound.Beep()` and fail safely when audio playback is unavailable | `pytest tests/test_sound_cues.py -q` passes; on Windows, verify cues remain audible even when the output device was idle before recording starts. |
 | AC-8.8 | Transcription watchdog, automatic CPU retry, ERROR overlay, and manual retry tray action all function correctly | Set `transcription_timeout_seconds` to a low value; trigger a transcription; verify timeout detection, auto-CPU-retry, ERROR overlay on final failure, and tray retry action |
 | AC-8.9 | User can pick the microphone from both tray and settings, and "long recording with no speech" surfaces a clear warning instead of a silent empty paste | Switch devices from tray and settings; verify `config.json` updates. Record ≥ 8 s on a muted/silent device → ERROR overlay + tray "No speech detected" balloon, no clipboard/history write. |
+| AC-8.10 | Single left-click on the tray icon toggles recording through the same lifecycle as the hotkey, and redundant tray/hotkey re-triggers within 1 second after stop/cancel/error/finalize are ignored without blocking a legitimate stop while recording is active | On Windows: left-click tray icon once → RECORDING + start cue; left-click again → stop + transcribe. Right-click still opens the menu. Rapid repeated hotkey presses or tray clicks within 1 second after stop/cancel/error/finalize do not start extra recording/transcription work. Hold-to-record and quick-tap hotkey toggle still behave normally. |
+
+### Task 8.10 — Tray click recording toggle + redundant trigger suppression
+
+Added 2026-04-20 as an explicit Phase 8 scope extension. Addresses two closely related gaps: (A) the app can only start/stop capture from the keyboard even though it already lives in the system tray, and (B) rapid repeated trigger gestures immediately after a recording session can still drive invalid extra processing when the intent is clearly accidental retriggering.
+
+**Deliverable:** Updated `src/spkup/app.py`; new `tests/test_app_trigger_guards.py`; refreshed `docs/01-architecture.md`, `docs/03-testing.md`, and `README.md`
+
+- [x] Add single left-click tray activation using `QSystemTrayIcon.activated` so the tray icon toggles recording on/off
+- [x] Keep right-click tray behavior unchanged so the context menu still opens normally
+- [x] Route tray and hotkey start/stop requests through shared App-level helpers so both inputs use the same state machine
+- [x] Add a fixed 1.0 s suppression window for redundant retriggers after stop/cancel/error/finalize without blocking a legitimate stop while recording is active or start-pending
+- [x] Preserve existing side effects for start/stop: tray icon color, sound cues, overlay state, recorder start/stop, playback mute lifecycle, transcription watchdog, and retry-action state
+- [x] Add automated app-level regression coverage for tray activation reasons, duplicate start/stop suppression, and the guarantee that hotkey hold and quick-tap toggle flows still use the existing lifecycle
+
+**Automated validation:** `$env:PYTHONPATH='src'; .\.venv\Scripts\python -m pytest tests\test_app_trigger_guards.py tests\test_hotkey.py tests\test_app_playback_mute.py tests\test_app_empty_transcription.py -q` passed 38/38. Full suite rerun: `$env:PYTHONPATH='src'; .\.venv\Scripts\python -m pytest tests\ -q` passed 145/145.
+
+**Acceptance criterion:** Automated coverage is in place and the tray-toggle / trigger-guard behavior is implemented, but manual Windows validation is still required because tray activation is shell-dependent: left-click tray icon once → record; left-click again → stop/transcribe; right-click still opens the menu; rapid repeated hotkey presses or tray clicks within 1 second after stop/cancel/error/finalize do not start extra work; hold-to-record and quick-tap toggle still behave normally. (AC-8.10)

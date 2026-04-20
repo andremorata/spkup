@@ -2,6 +2,7 @@ import dataclasses
 import logging
 import sys
 import threading
+import time
 from typing import cast
 
 from PyQt6.QtCore import Qt, QRect, QRectF, QTimer, QObject, pyqtSignal
@@ -29,6 +30,7 @@ _log = logging.getLogger(__name__)
 # treated as a likely mic problem and surfaced to the user. Shorter empties
 # are silently ignored so accidental hotkey taps do not spam warnings.
 EMPTY_WARNING_THRESHOLD_S = 5.0
+TRIGGER_SUPPRESSION_WINDOW_S = 1.0
 
 
 def _make_tray_icon(size: int = 64, color: str = "#ffffff") -> QIcon:
@@ -94,6 +96,7 @@ class App(QObject):
         self._listener_active = False
         self._recording_start_pending = False
         self._recording_active = False
+        self._start_trigger_suppression_until = 0.0
 
         # Core components
         self._recorder = AudioRecorder(
@@ -137,14 +140,15 @@ class App(QObject):
 
         # Hotkey listener (started only after a model is confirmed ready)
         self._listener = HotkeyListener(self._config.hotkey)
-        self._listener.recording_started.connect(self._on_recording_started)
-        self._listener.recording_stopped.connect(self._on_recording_stopped)
+        self._listener.recording_started.connect(self._on_hotkey_recording_started)
+        self._listener.recording_stopped.connect(self._on_hotkey_recording_stopped)
 
         self._app.aboutToQuit.connect(self._cleanup)
 
         # Tray icon & menu
         self._tray = QSystemTrayIcon(_make_tray_icon())
         self._tray.setToolTip("spkup — Push to Talk")
+        self._tray.activated.connect(self._on_tray_activated)
 
         self._menu = QMenu()
         settings_action = self._menu.addAction("Settings")
@@ -218,8 +222,8 @@ class App(QObject):
             if self._listener_active:
                 self._listener.stop()
             self._listener = HotkeyListener(new_config.hotkey)
-            self._listener.recording_started.connect(self._on_recording_started)
-            self._listener.recording_stopped.connect(self._on_recording_stopped)
+            self._listener.recording_started.connect(self._on_hotkey_recording_started)
+            self._listener.recording_stopped.connect(self._on_hotkey_recording_stopped)
             if self._listener_active:
                 self._listener.start()
 
@@ -344,6 +348,59 @@ class App(QObject):
 
     # ---------- Recording lifecycle ------------------------------------------
 
+    def _arm_start_trigger_suppression(self) -> None:
+        self._start_trigger_suppression_until = (
+            time.monotonic() + TRIGGER_SUPPRESSION_WINDOW_S
+        )
+
+    def _is_start_trigger_suppressed(self, now: float | None = None) -> bool:
+        current_time = time.monotonic() if now is None else now
+        return current_time < self._start_trigger_suppression_until
+
+    def _request_recording_start(self, source: str) -> None:
+        if self._recording_active or self._recording_start_pending:
+            _log.debug(
+                "Ignoring %s start trigger: recording already active=%s pending=%s",
+                source,
+                self._recording_active,
+                self._recording_start_pending,
+            )
+            return
+
+        current_time = time.monotonic()
+        if self._is_start_trigger_suppressed(current_time):
+            _log.debug(
+                "Ignoring %s start trigger during %.2fs suppression window",
+                source,
+                self._start_trigger_suppression_until - current_time,
+            )
+            return
+
+        self._on_recording_started()
+
+    def _request_recording_stop(self, source: str) -> None:
+        if not self._recording_active and not self._recording_start_pending:
+            _log.debug("Ignoring %s stop trigger: recording already idle", source)
+            return
+
+        self._on_recording_stopped()
+
+    def _on_hotkey_recording_started(self) -> None:
+        self._request_recording_start("hotkey")
+
+    def _on_hotkey_recording_stopped(self) -> None:
+        self._request_recording_stop("hotkey")
+
+    def _on_tray_activated(self, reason: QSystemTrayIcon.ActivationReason) -> None:
+        if reason != QSystemTrayIcon.ActivationReason.Trigger:
+            return
+
+        if self._recording_active or self._recording_start_pending:
+            self._request_recording_stop("tray")
+            return
+
+        self._request_recording_start("tray")
+
     def _capture_recording_duration(self, audio) -> None:
         try:
             self._last_recording_duration = len(audio) / 16000.0
@@ -411,6 +468,7 @@ class App(QObject):
 
         if self._recording_start_pending:
             self._recording_start_pending = False
+            self._arm_start_trigger_suppression()
             self._overlay.show_state(OverlayState.HIDDEN)
             return
 
@@ -425,12 +483,14 @@ class App(QObject):
         self._overlay.show_state(OverlayState.TRANSCRIBING)
         self._timeout_was_cuda_retry = False
         self._start_transcription_watchdog()
+        self._arm_start_trigger_suppression()
         play_cue("transcribing")
 
     def _on_recording_error(self, msg: str) -> None:
         _log.error("Recording error: %s", msg)
         self._recording_start_pending = False
         self._recording_active = False
+        self._arm_start_trigger_suppression()
         self._restore_playback_mute()
         self._tray.setIcon(_make_tray_icon(color="#ffffff"))
         self._overlay.show_state(OverlayState.HIDDEN)
@@ -466,6 +526,7 @@ class App(QObject):
 
     def _on_transcription_finished(self, text: str) -> None:
         self._stop_transcription_watchdog()
+        self._arm_start_trigger_suppression()
         stripped = text.strip()
         duration = self._last_recording_duration
         _log.info(
@@ -508,6 +569,7 @@ class App(QObject):
 
     def _on_transcription_error(self, msg: str) -> None:
         self._stop_transcription_watchdog()
+        self._arm_start_trigger_suppression()
         _log.error("Transcription error: %s", msg)
         self._overlay.show_state(OverlayState.ERROR)
         self._set_retry_action_enabled(self._transcriber.has_pending_retry)
@@ -539,6 +601,7 @@ class App(QObject):
                 return
 
         self._timeout_was_cuda_retry = False
+        self._arm_start_trigger_suppression()
         self._overlay.show_state(OverlayState.ERROR)
         self._set_retry_action_enabled(self._transcriber.has_pending_retry)
         if QSystemTrayIcon.supportsMessages():
