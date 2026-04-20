@@ -1,7 +1,7 @@
 # spkup — Project Plan
 
 > Master planning document for spkup.
-> Supersedes `PLAN.md` (deleted). Source of truth for phases, stack, and delivery sequencing.
+> Supersedes `PLAN.md` (deleted). Source of truth for stack, historical MVP phases, and post-MVP delivery sequencing.
 
 ---
 
@@ -11,7 +11,9 @@
 - **Problem statement:** Capture voice via a global push-to-talk hotkey, transcribe it locally with a Whisper model, and paste the result into the clipboard — always available from the system tray.
 - **Success definition:** Hold a hotkey → speak → release → transcribed text is in the clipboard within a few seconds, with visual feedback via an on-screen overlay.
 - **Primary users:** Single user (personal tool), Windows 11, RTX 4070 (8 GB VRAM).
-- **Delivery constraints:** No server infrastructure. Local-first Windows desktop app. Packaging, CI/CD, versioning, and distribution are planned for Phase 9 and are not implemented yet.
+- **Lifecycle mode:** Maintenance mode as of 2026-04-20. The original MVP build-out is considered complete and frozen as historical baseline.
+- **Delivery constraints:** No server infrastructure. Local-first Windows desktop app. Packaging, CI/CD, versioning, and distribution are part of the current baseline.
+- **Change policy:** New non-trivial work must be tracked as a new spec or requirement in `specs/`; do not extend `phase1` through `phase9`.
 
 ---
 
@@ -29,10 +31,10 @@
 | Infrastructure | Local only | Confirmed | No cloud, no Docker |
 | Observability | File logging | Confirmed | `%LOCALAPPDATA%/spkup/spkup.log` |
 | Testing | pytest, TDD | Confirmed | Unit tests for core logic, written alongside implementation |
-| Packaging | PyInstaller | Planned | Baseline frozen Windows build for Phase 9; not implemented yet |
-| CI/CD | GitHub Actions | Planned | Phase 9 target for build, test, and release automation; no workflows yet |
-| Versioning | `X.Y.Z` + Git tags `vX.Y.Z` | Planned | Planned release convention for Phase 9; not implemented yet |
-| Distribution | GitHub Releases | Planned | Planned release channel for packaged builds; not configured yet |
+| Packaging | PyInstaller | Implemented | Windows frozen-build baseline exists; future refinements should be tracked as maintenance items |
+| CI/CD | GitHub Actions | Implemented | CI and tagged-release workflows exist |
+| Versioning | `X.Y.Z` + Git tags `vX.Y.Z` | Implemented | Source version in `src/spkup/__init__.py`; release tags align to source version |
+| Distribution | GitHub Releases | Implemented | Tagged release workflow publishes the Windows artifact |
 | License | No constraints | Confirmed | Personal tool |
 
 ---
@@ -61,7 +63,7 @@ Hotkey tapped again → recording_stopped → Recorder.stop()
 
 ---
 
-## 5. Delivery Phases
+## 5. Original MVP Delivery Phases
 
 | Phase | Scope | Issue File |
 | --- | --- | --- |
@@ -73,11 +75,20 @@ Hotkey tapped again → recording_stopped → Recorder.stop()
 | 6 | Clipboard + full signal wiring | `specs/phase6.issue.md` |
 | 7 | Settings dialog | `specs/phase7.issue.md` |
 | 8 | Polish + recent transcription history + temporary playback muting during capture + microphone input selection + tray click recording toggle + redundant trigger suppression | `specs/phase8.issue.md` |
-| 9 | Planned packaging + GitHub CI/CD + versioning + releases | `specs/phase9.issue.md` |
+| 9 | Packaging + GitHub CI/CD + versioning + releases | `specs/phase9.issue.md` |
 
 ---
 
-## 6. Key Design Decisions
+## 6. Post-MVP Maintenance Workflow
+
+- The phase files above are historical records of how the MVP was built. They are kept for traceability, not as the place for new scope.
+- Every new incremental feature, bug-fix bundle, packaging improvement, release-process change, or behavior-changing refactor should start as a dedicated issue file in `specs/`, normally from `specs/spec-template.issue.md`.
+- If a new request materially changes roadmap priorities, update this plan and `specs/progress.status.md` before implementation.
+- Historical references may still point to the original phases, but new work must not be added to them.
+
+---
+
+## 7. Key Design Decisions
 
 | Date | Decision | Notes |
 | --- | --- | --- |
@@ -87,11 +98,12 @@ Hotkey tapped again → recording_stopped → Recorder.stop()
 | 2026-04-01 | pynput over `keyboard` lib | Distinct on_press/on_release callbacks; no admin required |
 | 2026-04-01 | QThread for transcription | Never block the UI thread during inference |
 | 2026-04-01 | TDD for core modules | Tests written alongside config, hotkey, recorder, transcriber |
-| 2026-04-01 | Planned Phase 9 release direction | PyInstaller baseline frozen Windows build; GitHub Actions for CI/release automation; version numbers `X.Y.Z` aligned to Git tags `vX.Y.Z`; GitHub Releases as the distribution channel. Planned only, not implemented yet |
+| 2026-04-01 | Release contract baseline | PyInstaller Windows build, GitHub Actions CI/release automation, `X.Y.Z` source version aligned to `vX.Y.Z` tags, and GitHub Releases as the distribution channel |
+| 2026-04-20 | Maintenance mode | Original MVP phases frozen as historical baseline; all new work enters through new spec / requirement issues |
 
 ---
 
-## 7. Risks
+## 8. Risks
 
 | Risk | Impact | Mitigation | Status |
 | --- | --- | --- | --- |
@@ -102,18 +114,12 @@ Hotkey tapped again → recording_stopped → Recorder.stop()
 
 ---
 
-## 8. Readiness Checklist
+## 9. Current Checklist
 
 - [x] Stack documented and confirmed
-- [x] Phases defined with issue files
+- [x] Historical MVP phases recorded for traceability
 - [x] Testing strategy agreed (TDD, pytest)
 - [x] Observability approach agreed (file logging)
-- [ ] Phase 1 validated
-- [ ] Phase 2 validated
-- [ ] Phase 3 validated
-- [ ] Phase 4 validated
-- [ ] Phase 5 validated
-- [ ] Phase 6 validated
-- [ ] Phase 7 validated
-- [ ] Phase 8 validated
-- [ ] Phase 9 validated
+- [x] Maintenance mode decision documented
+- [x] Post-MVP spec / requirement workflow defined
+- [ ] Next maintenance item opened in `specs/` when the next approved change arrives

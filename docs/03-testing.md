@@ -1,17 +1,17 @@
 # spkup — Testing Strategy
 
-> Quality approach for a personal desktop tool: TDD for core logic, manual verification for UI and hardware integration.
+> Quality approach for a personal desktop tool: TDD for core logic, repeatable automated checks locally and in CI where practical, and manual verification for UI and hardware integration.
 
 ---
 
 ## 1. Philosophy
 
-Validation is currently local. CI is not implemented yet, but Phase 9 will add repeatable automated checks in CI for the parts of the application that are practical to verify outside a Windows desktop session. The test suite exists for two reasons:
+Validation starts locally and is reinforced by CI for checks that are practical to automate outside a live Windows desktop session. The test suite exists for two reasons:
 
 1. **Prevent regressions** — core logic is easy to break silently; tests catch that instantly.
 2. **Drive design** — writing tests first for pure logic (parsing, config, state machines) produces cleaner interfaces.
 
-Testing effort is proportional to testability. Pure logic gets automated tests that currently run locally and are intended to run in CI once Phase 9 lands. Hardware-dependent or Qt-dependent code gets manual verification on the target Windows machine.
+Testing effort is proportional to testability. Pure logic gets automated tests that run locally and in CI. Hardware-dependent or Qt-dependent code still gets manual verification on the target Windows machine.
 
 ---
 
@@ -49,19 +49,19 @@ pytest
 | `app.py` (tray toggle + trigger guards) | `tests/test_app_trigger_guards.py` | Tray activation reasons, shared start/stop request gating, redundant trigger suppression after cancel/error/finalize, legitimate stop while active |
 | `transcription_history.py` | `tests/test_transcription_history.py` | Add/list ordering, keep only last 5 entries, delete behavior, Unicode text, duplicate entries remain distinct |
 
-These are the checks that are suitable for repeatable automated execution. Today they are run locally with `pytest`; Phase 9 is planned to run the same class of checks in CI.
+These are the checks that are suitable for repeatable automated execution. They are run locally with `pytest`, and the same class of checks should remain compatible with CI.
 
 ---
 
 ## 4. What CI Can Cover
 
-CI is not in place yet, but the intended CI scope is the automated checks above:
+CI covers the automated checks above:
 
 - Pure Python unit tests under `tests/`
 - Mocked behavior for config, hotkey parsing, recorder lifecycle, model path management, clipboard integration, Windows autostart registry calls, playback-mute controller and app lifecycle rules, and transcription history rules
 - Regression tests for defects that can be reproduced without a live Qt desktop session, real audio devices, or GPU execution
 
-For release preparation, these same tests remain the required automated baseline before cutting a version. A release candidate is not ready if `pytest` is failing locally, even though CI automation for that gate has not been implemented yet.
+For release preparation, these same tests remain the required automated baseline before cutting a version. A release candidate is not ready if `pytest` is failing locally, even if CI is green.
 
 The current local automated baseline includes playback-mute coverage in `tests/test_playback_mute.py` and `tests/test_app_playback_mute.py`. The latest full local suite rerun in this workspace used `.venv\Scripts\python -m pytest tests\ -q` and exited 0.
 
@@ -89,7 +89,7 @@ These modules involve Qt widget painting, hardware I/O, or CUDA inference — no
 
 These apply to every module in the "unit tests" table above:
 
-1. Write the failing test **before** or **alongside** the implementation — never after the phase is declared done.
+1. Write the failing test **before** or **alongside** the implementation — never after the phase, spec, or task is declared done.
 2. A task is not complete until its tests exist and pass.
 3. Bug fixes must include a regression test at the unit level where practical.
 
@@ -103,16 +103,16 @@ These apply to every module in the "unit tests" table above:
 
 ---
 
-## 8. Acceptance Criteria by Phase
+## 8. Acceptance Criteria by Work Item
 
-Each phase issue file (`specs/phaseN.issue.md`) lists specific acceptance criteria. A phase is `Completed (validated)` when:
+Each active spec issue lists specific acceptance criteria. In historical MVP records this may be a phase file (`specs/phaseN.issue.md`); in maintenance mode it should normally be a spec or requirement issue. A work item is `Completed (validated)` when:
 
 - All unit tests in scope pass (`pytest` exits 0)
-- Automated checks in scope have been run locally; once Phase 9 lands, the same checks should also pass in CI
+- Automated checks in scope have been run locally; when matching CI or release automation exists, the same checks should also pass there
 - All manual checks described in the issue pass
 - `specs/progress.status.md` is updated with evidence
 
-For Phase 9 release work specifically, the minimum local release-validation baseline is:
+For release-related work specifically, the minimum local release-validation baseline is:
 
 - `pytest`
 - Manual Windows smoke check of the runnable app build under the current source version

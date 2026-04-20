@@ -1,5 +1,8 @@
 # Phase N — [Title]
 
+> Historical template retained for original MVP phase records.
+> For new post-MVP work in `spkup`, use `specs/spec-template.issue.md` instead.
+
 > **Reference:** `specs/[project-plan-file].md` — Phase N
 > **Depends on:** [Previous phase name, or "None — first phase"]
 > **Unlocks:** [Next phase name, or "None — final phase"]

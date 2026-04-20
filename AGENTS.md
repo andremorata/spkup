@@ -15,6 +15,15 @@ Your job is to help turn this scaffold into a concrete project without introduci
 - When a placeholder exists, either preserve it or replace it with an explicit project decision. Do not invent hidden defaults.
 - Default to clean boundaries, testable code, and explicit verification.
 
+## Repository Lifecycle Mode
+
+As of 2026-04-20, `spkup` is no longer in original MVP build-out mode. The project is now in **maintenance mode**.
+
+- `specs/phase1.issue.md` through `specs/phase9.issue.md` are historical records of the original MVP roadmap.
+- Do **not** extend those original phase files with new scope, tasks, or acceptance criteria.
+- Every new non-trivial change from this point forward must be tracked as a new spec, extension, or requirement file in `specs/` before implementation starts.
+- When in doubt, prefer creating a new maintenance work item such as `specs/spec-<slug>.issue.md` instead of reopening or enlarging an original MVP phase.
+
 ## Bootstrap Mode
 
 Bootstrap mode is active when this repository has not yet been converted into a concrete project. Recognize it by these signals:
@@ -58,8 +67,8 @@ The `specs/` folder is the execution backbone of the project. Agents must treat 
 
 - `project.plan.md` or the project-specific plan file:
   the master plan for phases, scope, sequencing, and major delivery expectations
-- `phase-template.issue.md` or the active phase issue files:
-  the actionable breakdown for a single phase, milestone, or workstream
+- `phase-template.issue.md`, `spec-template.issue.md`, or the active issue files:
+  the actionable breakdown for a single historical phase, milestone, workstream, or post-MVP maintenance item
 - `progress.status.md`:
   the source of truth for current status, validation state, evidence, and next actions
 
@@ -68,35 +77,36 @@ The `specs/` folder is the execution backbone of the project. Agents must treat 
 Before doing substantial work:
 
 1. Read the project plan in `specs/` to understand the intended roadmap.
-2. Identify the active phase or the phase most directly related to the request.
-3. Read the corresponding phase issue file before implementing changes.
+2. Identify whether the request belongs to a historical MVP phase for reference only or to an active post-MVP spec / requirement.
+3. Read the corresponding issue file before implementing changes. In maintenance mode, prefer a spec / requirement issue over a historical phase file.
 4. Check `progress.status.md` to understand the current state, risks, and validation status.
 
 While doing the work:
 
-- Stay aligned with the current plan and phase scope unless the user explicitly changes direction.
+- Stay aligned with the current plan and scope unless the user explicitly changes direction.
+- For `spkup`, do not append new work to `phase1` through `phase9`; open or update a dedicated spec / requirement issue instead.
 - Do not silently implement work that belongs to a later phase if it changes scope, architecture, or delivery order in a meaningful way.
 - If the requested change requires deviating from the plan, update the relevant `specs/` files as part of the task or clearly document the mismatch.
 - Keep implementation, docs, and progress tracking synchronized.
 
 ### Handling Out-of-Scope Requests
 
-When a user asks for something that is not covered by the current plan or the active phase, do not implement it silently. Follow this protocol:
+When a user asks for something that is not covered by the current plan or the active work item, do not implement it silently. Follow this protocol:
 
-1. **Identify the gap** — determine whether the request falls outside the active phase scope, outside the project plan entirely, or contradicts an existing decision.
-2. **Confirm with the user** — briefly state that the request is not covered by the current plan or phase and ask whether they want it treated as a new addition.
+1. **Identify the gap** — determine whether the request falls outside the active spec / requirement scope, outside the project plan entirely, or contradicts an existing decision.
+2. **Confirm with the user** — briefly state that the request is not covered by the current plan or active work item and ask whether they want it treated as a new addition.
 3. **Update `specs/` before implementing** — once confirmed, choose the appropriate update:
-   - **Extend the active phase** — if the work is small and closely related to the current phase, add a new task and acceptance criterion to the existing phase issue file.
-   - **Create a new sub-phase** — if the work is a meaningful self-contained slice that builds on the current phase, create a new phase issue file (e.g., `phaseNb.issue.md`) and link it from the plan.
-   - **Create a new phase** — if the work represents a distinct delivery milestone, add a new phase entry to the project plan and create the corresponding issue file.
+  - **Extend the active spec / requirement** — if the work is small and clearly part of an already-open maintenance item, add the task and acceptance criterion there.
+  - **Create a new spec / requirement** — if the work is a distinct incremental feature, bug-fix bundle, packaging improvement, or behavior change, create a new issue file in `specs/` and link it from the plan or tracker.
+  - **Create a new milestone** — if the work represents a larger delivery slice than a single spec, add a new milestone entry to the project plan and create the corresponding issue file.
    - **Update the project plan** — in all cases, ensure the plan file reflects the new scope, sequencing, and any shifted delivery order.
-4. **Then implement** — only after `specs/` is updated proceed with the requested work, using the newly created or updated phase issue as the guiding document.
+4. **Then implement** — only after `specs/` is updated proceed with the requested work, using the newly created or updated issue as the guiding document.
 
 After completing meaningful work:
 
-- Update the relevant phase issue if scope, tasks, acceptance criteria, or notes changed.
-- Update `progress.status.md` when phase status, evidence, risks, or next actions changed.
-- Reference the plan and phase context in summaries so future agents can continue from the intended roadmap.
+- Update the relevant issue file if scope, tasks, acceptance criteria, or notes changed.
+- Update `progress.status.md` when work-item status, evidence, risks, or next actions changed.
+- Reference the plan and work-item context in summaries so future agents can continue from the intended roadmap.
 - Review `docs/` for any pages that are now stale, incomplete, or contradicted by the changes just made. Update them in the same session — do not leave documentation drift for the next agent to discover.
 
 ### Precedence inside `specs/`
@@ -105,7 +115,7 @@ Use this order when interpreting project intent:
 
 1. Active user instruction
 2. The project plan in `specs/`
-3. The relevant phase issue file
+3. The relevant issue file
 4. `progress.status.md`
 
 If these conflict, do not guess silently. Align the files as part of the task or call out the mismatch clearly.
@@ -148,7 +158,7 @@ When source code exists:
 - Keep implementation consistent with CI/CD and observability expectations.
 - Add or update tests for behavior changes.
 - Avoid introducing tooling that conflicts with documented delivery workflows.
-- Use the active project plan and phase issue as the default boundary for what should be implemented now.
+- Use the active project plan and the relevant issue file as the default boundary for what should be implemented now.
 
 Unless the project documents a different choice, assume these defaults:
 

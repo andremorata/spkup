@@ -1,19 +1,20 @@
 # spkup — Delivery Workflow
 
-> How work moves from spec to validated implementation, phase by phase.
+> How work moves from spec to validated implementation in maintenance mode.
 
 ---
 
-## 1. Principles
+## 1. Current Mode
 
-- One phase at a time. Do not start Phase N+1 until Phase N is validated.
-- Every phase has an issue file in `specs/` that defines tasks and acceptance criteria before implementation begins.
-- Local validation remains required for every phase on the developer machine.
-- A phase is not done when code is written — it is done when acceptance criteria are verified and `progress.status.md` reflects that.
+- The original MVP roadmap in `specs/phase1.issue.md` through `specs/phase9.issue.md` is now historical baseline material.
+- As of 2026-04-20, `spkup` is in maintenance mode.
+- Do not extend the original MVP phase files with new scope.
+- Every new non-trivial change should start as a dedicated spec or requirement issue in `specs/`.
+- Local validation remains required on the developer machine, even when matching CI or release automation exists.
 
 ---
 
-## 2. Phase Lifecycle
+## 2. Work Item Lifecycle
 
 ```
 ┌──────────────┐     ┌──────────────┐     ┌──────────────┐     ┌───────────────────────┐
@@ -24,29 +25,30 @@
          └───────────────────────────────────────┘
 ```
 
-**In progress:** Implementation underway. Issue file tasks are being ticked off.
+**In progress:** Implementation underway. Issue-file tasks are being ticked off.
 
 **Completed (declared):** All tasks done; required local checks performed.
 
-**Completed (validated):** All acceptance criteria explicitly verified; evidence recorded in `progress.status.md` from automated checks and/or manual validation, depending on the phase.
+**Completed (validated):** All acceptance criteria explicitly verified; evidence recorded in `progress.status.md` from automated checks and/or manual validation, depending on the work item.
 
 ---
 
-## 3. Starting a Phase
+## 3. Starting New Work
 
-1. Read the phase issue file (`specs/phaseN.issue.md`) in full.
-2. Confirm all dependencies from previous phases are validated.
-3. Update `progress.status.md`: set phase status to `In progress`.
-4. Work through tasks in order; tick checkboxes in the issue file as each step completes.
+1. Read `specs/project.plan.md` and `specs/progress.status.md`.
+2. Check whether the request already belongs to an open maintenance item in `specs/`.
+3. If not, create a new issue file from `specs/spec-template.issue.md`, using a descriptive filename such as `specs/spec-tray-hotkey-debounce.issue.md`.
+4. Update `specs/project.plan.md` or `specs/progress.status.md` to record the new work item before implementation begins.
+5. Work through tasks in order; tick checkboxes in the issue file as each step completes.
 
 ---
 
-## 4. Completing a Phase
+## 4. Completing a Work Item
 
-Before declaring a phase complete:
+Before declaring a work item complete:
 
 - [ ] All issue file tasks are ticked
-- [ ] All required local automated checks for this phase pass (`pytest` exits 0 today; automated pipeline evidence applies once implemented for the relevant phase)
+- [ ] All required local automated checks for this work item pass (`pytest` exits 0 today; matching CI or release automation evidence applies when relevant)
 - [ ] All required manual checks from the issue file have been performed locally
 - [ ] All acceptance criteria in the issue file's AC table are met
 - [ ] No stub print statements or placeholder slots remain in the code
@@ -54,9 +56,9 @@ Before declaring a phase complete:
 Update `progress.status.md`:
 - Set status to `Completed (validated)`
 - Record evidence (automated output and/or manual observation notes)
-- Set the next phase as the new active phase
+- Set the next action or next maintenance item
 
-For Phase 9 release/versioning work, the repo follows one contract:
+For release/versioning work, the repo follows one contract:
 
 - Source version format: `X.Y.Z`
 - Source of truth: `src/spkup/__init__.py`
@@ -67,7 +69,7 @@ The detailed operator workflow for preparing and cutting a release is documented
 
 ---
 
-## 5. Phase Map
+## 5. Historical MVP Roadmap
 
 | Phase | Issue file | Scope |
 | --- | --- | --- |
@@ -78,15 +80,20 @@ The detailed operator workflow for preparing and cutting a release is documented
 | 5 | `specs/phase5.issue.md` | Visual overlay |
 | 6 | `specs/phase6.issue.md` | Clipboard + full signal wiring |
 | 7 | `specs/phase7.issue.md` | Settings dialog + in-app model download |
-| 8 | `specs/phase8.issue.md` | Logging, error handling, auto-start, first-run |
-| 9 | `specs/phase9.issue.md` | Planned packaging, CI/release automation, versioning, distribution |
+| 8 | `specs/phase8.issue.md` | Polish work accumulated during the original MVP build-out |
+| 9 | `specs/phase9.issue.md` | Packaging, CI/release automation, versioning, distribution baseline |
 
 ---
 
-## 6. Local Validation and Planned Automation
+## 6. Maintenance Intake Rules
 
-Today, validation is performed locally on the developer machine. That includes running the required tests and completing any manual checks defined by the active phase issue.
+- Create a new spec / requirement for any feature, bug-fix bundle, packaging enhancement, release-process improvement, or behavior-changing refactor that is more than a trivial edit.
+- Only extend an existing maintenance item when the new request is clearly part of the same approved slice of work.
+- Do not reopen the original MVP by appending tasks to `phase1` through `phase9`.
+- If a request changes priorities or delivery order, update `specs/project.plan.md` and `specs/progress.status.md` in the same session.
 
-Phase 9 is planned to add packaging plus CI/release automation so the same checks can run repeatably in an automated pipeline. That automation does not exist yet, so this workflow still treats local validation as the source of truth for current phases.
+## 7. Local Validation and Automation
 
-Until that automation lands, cutting a release remains an operator-driven process: update the source version once, validate locally, create the matching `vX.Y.Z` tag, and publish artifacts that use the same version in their filenames.
+Validation is still performed locally on the developer machine. That includes running the tests and completing any manual checks defined by the active work item.
+
+The repository also has CI and release automation for the release flow. Those automations complement local validation, but they do not replace the requirement to record evidence in `specs/progress.status.md`.

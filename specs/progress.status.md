@@ -1,11 +1,12 @@
 # Project Progress Tracker
 
-> Source of truth for high-level delivery status in projects created from this scaffold.
+> Source of truth for high-level delivery status, maintenance tracking, and historical MVP context.
 
 ## Current Snapshot
 
-- Active phase: Phase 8 — Polish
-- Overall status: In progress
+- Lifecycle mode: Maintenance
+- Active work item: None open in `specs/` yet; create a new spec / requirement for the next non-trivial change
+- MVP baseline: Closed and frozen as historical reference
 - Last updated: 2026-04-20
 - Primary risks: PyQt6 system-tray behaviour differences across Windows builds; CUDA availability for faster-whisper at runtime
 
@@ -16,24 +17,29 @@
 - `Blocked`
 - `Completed (declared)`
 - `Completed (validated)`
+- `Closed (historical baseline)`
 
-## Phase Board
+## Open Maintenance Board
+
+No open specs or requirement issues are currently tracked. The next approved incremental change should begin by creating a new issue file in `specs/`, usually from `specs/spec-template.issue.md`.
+
+## Historical MVP Roadmap
 
 | Phase | Scope | Status | Last Updated | Evidence / Notes | Next Action |
 | --- | --- | --- | --- | --- | --- |
-| 1 | Project setup + core skeleton | Completed (validated) | 2026-04-01 | Requirements install passed; editable install passed after hatchling backend fix; `pytest tests/test_config.py -v` passed (4/4); `python -m spkup` started successfully | Handoff to Phase 2 |
-| 2 | Global hotkey (press-and-hold) | Completed (validated) | 2026-04-01 | `tests/test_hotkey.py` passes (10/10); `python -m spkup` confirmed single start on hold, single stop on release, no flooding | Handoff to Phase 3 |
-| 3 | Audio recording | Completed (validated) | 2026-04-01 | `pytest tests/test_recorder.py` 4/4 passed; full suite 18/18 passed; `from spkup.app import App` imports cleanly; no linter errors in recorder.py, app.py, test_recorder.py | Handoff to Phase 4 |
-| 4 | Transcription engine | Completed (validated) | 2026-04-01 | faster-whisper CUDA pipeline; model_manager.py, transcriber.py; full suite 28/28 passed | Handoff to Phase 5 |
-| 5 | Visual overlay | Completed (validated) | 2026-04-01 | overlay.py; top-center/bottom-center positions; audio cues; 28/28 passed | Handoff to Phase 6 |
-| 6 | Clipboard + full signal wiring | Completed (validated) | 2026-04-01 | clipboard.py; full recording→transcription→clipboard pipeline wired in app.py; 28/28 passed | Handoff to Phase 7 |
-| 7 | Settings dialog | Completed (validated) | 2026-04-01 | settings_dialog.py; model download worker; hotkey capture widget; overlay position selector; 28/28 passed | Handoff to Phase 8 |
-| 8 | Polish + recent transcription history + temporary playback muting during capture + microphone input selection + tray click recording toggle + redundant trigger suppression | In progress | 2026-04-20 | Recent transcription history, playback muting, and PortAudio-based synthesized sound cues are implemented. Task 8.6 adds `mute_playback_while_recording` config, `playback_mute.py`, a settings checkbox, and app lifecycle restore-on-stop/error/quit wiring. Task 8.7 adds `sound_cues.py`, replaces `winsound.Beep()` with `sounddevice.play(...)`, and keeps cue playback failure-safe. Task 8.8 adds transcription resilience: watchdog timer, audio retention for retry, ERROR overlay state, automatic CUDA→CPU fallback on timeout, "Retry last transcription" tray action, and enhanced diagnostic logging. Task 8.9 (added 2026-04-16) adds microphone input selection (tray submenu + settings combo, persisted as `{name, hostapi}`) and empty-transcription detection (≥ 5 s recording → empty text surfaces ERROR overlay + "No speech detected" tray balloon instead of silently overwriting the clipboard). Task 8.10 (added 2026-04-20) is now implemented: the tray icon supports single left-click record/stop toggle via the same App-level start/stop helpers used by the hotkey, and redundant start retriggers are suppressed for 1 second after stop/cancel/error/finalize. Automated validation: `$env:PYTHONPATH='src'; .\.venv\Scripts\python -m pytest tests\test_app_trigger_guards.py tests\test_hotkey.py tests\test_app_playback_mute.py tests\test_app_empty_transcription.py -q` passed 38/38, and `$env:PYTHONPATH='src'; .\.venv\Scripts\python -m pytest tests\ -q` passed 145/145 on 2026-04-20. Manual Windows validation is still pending for recent-history tray/window behavior, AC-8.6 playback-mute behavior, AC-8.7 cue audibility with an idle output device, AC-8.8 watchdog/retry, AC-8.9 tray/settings device switching + empty-transcription warning on a muted device, and the new AC-8.10 tray-toggle / trigger-guard behavior. | Perform remaining manual Windows validation for all Phase 8 tasks, then reassess Phase 8 status |
-| 9 | Packaging + release readiness | Blocked | 2026-04-01 | Planned next phase only; blocked until Phase 8 validation is complete | Finish Phase 8 validation, then begin Phase 9 implementation |
+| 1 | Project setup + core skeleton | Closed (historical baseline) | 2026-04-20 | Historical MVP phase record retained for reference. Original validation evidence remains below. | Do not extend; open a new spec if related follow-up work is needed |
+| 2 | Global hotkey (press-and-hold) | Closed (historical baseline) | 2026-04-20 | Historical MVP phase record retained for reference. Original validation evidence remains below. | Do not extend; open a new spec if related follow-up work is needed |
+| 3 | Audio recording | Closed (historical baseline) | 2026-04-20 | Historical MVP phase record retained for reference. Original validation evidence remains below. | Do not extend; open a new spec if related follow-up work is needed |
+| 4 | Transcription engine | Closed (historical baseline) | 2026-04-20 | Historical MVP phase record retained for reference. Original validation evidence remains below. | Do not extend; open a new spec if related follow-up work is needed |
+| 5 | Visual overlay | Closed (historical baseline) | 2026-04-20 | Historical MVP phase record retained for reference. Original validation evidence remains below. | Do not extend; open a new spec if related follow-up work is needed |
+| 6 | Clipboard + full signal wiring | Closed (historical baseline) | 2026-04-20 | Historical MVP phase record retained for reference. Original validation evidence remains below. | Do not extend; open a new spec if related follow-up work is needed |
+| 7 | Settings dialog | Closed (historical baseline) | 2026-04-20 | Historical MVP phase record retained for reference. Original validation evidence remains below. | Do not extend; open a new spec if related follow-up work is needed |
+| 8 | Polish + recent transcription history + temporary playback muting during capture + microphone input selection + tray click recording toggle + redundant trigger suppression | Closed (historical baseline) | 2026-04-20 | This phase accumulated several late-MVP enhancements. Remaining follow-up validation or enhancement work must now be reopened as a dedicated maintenance item instead of extending Phase 8. | Open a new spec / requirement for any follow-up validation or enhancement |
+| 9 | Packaging + release readiness | Closed (historical baseline) | 2026-04-20 | Packaging, CI, versioning, and release automation landed during the original roadmap. Any future packaging or release-process work must now be tracked outside Phase 9. | Open a new spec / requirement for any release-process improvement or validation gap |
 
 ## Validation Notes
 
-To mark a phase as `Completed (validated)`, record:
+To mark a maintenance work item as `Completed (validated)`, record:
 
 1. Acceptance criteria satisfied.
 2. Verification commands or checks performed.
@@ -60,3 +66,4 @@ To mark a phase as `Completed (validated)`, record:
 - 2026-04-16: Phase 8 scope extended. Task 8.9 added: microphone input selection + empty-transcription detection. New `src/spkup/audio_devices.py` (device enumeration + `{name, hostapi}` spec resolution with graceful fallback to system default); `AppConfig.input_device: dict | None`; `AudioRecorder.set_device()`; tray **Microphone** submenu populated on `aboutToShow` (handles hotplug) plus settings-dialog **Microphone** `QComboBox`; recording-duration capture; `_on_transcription_finished` rewritten so that empty text + ≥ 5 s recording emits `OverlayState.ERROR` and a "spkup — No speech detected" tray balloon, while empty text + < 5 s is silent — in both cases the clipboard is no longer overwritten with empty and history is no longer spammed. New tests: `tests/test_audio_devices.py` (11), `tests/test_app_empty_transcription.py` (6), plus extensions in `tests/test_config.py` (+3) and `tests/test_recorder.py` (+2). `tests/test_transcription_resilience.py` stub extended with `_last_recording_duration`. Full suite 133/133 passed via `$env:PYTHONPATH='src'; .\.venv\Scripts\python -m pytest tests\ -q`. Manual Windows validation of AC-8.9 (tray/settings mic switching + warning on muted device) is still pending.
 - 2026-04-20: Phase 8 scope extended. Task 8.10 added: tray single-click recording toggle + redundant trigger suppression. Planned implementation: wire `QSystemTrayIcon.activated` in `app.py`, route tray and hotkey requests through the same App-level start/stop helpers, and ignore redundant start requests for 1 second after stop/cancel/error/finalize without blocking a legitimate stop while recording is active. This entry records the scope addition only; implementation, automated validation, and manual Windows tray verification are still pending.
 - 2026-04-20: Phase 8 / Task 8.10 implemented. `app.py` now wires `QSystemTrayIcon.activated` so single left-click toggles recording through the same App-level request helpers used by the hotkey. A shared 1-second suppression window now ignores redundant start retriggers after stop/cancel/error/finalize while still allowing a legitimate stop during active or pending recording. New `tests/test_app_trigger_guards.py` covers tray activation reasons, request gating, and suppression-window arming. Docs updated: `docs/01-architecture.md`, `docs/03-testing.md`, `README.md`. Automated validation passed: `$env:PYTHONPATH='src'; .\.venv\Scripts\python -m pytest tests\test_app_trigger_guards.py tests\test_hotkey.py tests\test_app_playback_mute.py tests\test_app_empty_transcription.py -q` (38/38) and `$env:PYTHONPATH='src'; .\.venv\Scripts\python -m pytest tests\ -q` (145/145). Manual Windows tray validation remains pending.
+- 2026-04-20: Project lifecycle updated to maintenance mode. The original MVP roadmap (`phase1` through `phase9`) is now treated as closed historical baseline. From this point forward, new functionality, extensions, and follow-up validation work must be tracked as new spec / requirement issues in `specs/` rather than by extending the original phases.

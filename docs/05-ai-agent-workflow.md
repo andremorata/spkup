@@ -8,17 +8,18 @@
 
 Before doing any substantial work, read:
 
-1. `specs/project.plan.md` — confirmed stack, assumptions, phase map
-2. The active phase issue file (`specs/phaseN.issue.md`) — tasks and acceptance criteria
-3. `specs/progress.status.md` — current phase status and what's validated
+1. `specs/project.plan.md` — confirmed stack, assumptions, historical MVP baseline, maintenance workflow
+2. The active maintenance issue file in `specs/` — normally a spec or requirement issue; use historical phase files only for reference
+3. `specs/progress.status.md` — current maintenance status and what's validated
 4. `docs/01-architecture.md` — component diagram, threading model, module responsibilities
 
 ---
 
 ## 2. Scope Rules
 
-- Work within the active phase. Do not implement tasks from a future phase without updating `specs/` first.
-- If a request is out of scope for the current phase, say so and ask whether to extend the issue file or create a new phase.
+- The original `phase1` through `phase9` files are historical MVP records. Do not append new scope to them.
+- Work within the active maintenance item. Do not implement new functionality without updating `specs/` first.
+- If a request is out of scope for the current maintenance item, say so and ask whether to open a new spec / requirement or explicitly expand the current one.
 - Never silently invent new modules, dependencies, or architectural patterns not documented in `docs/01-architecture.md`.
 
 ---
@@ -52,8 +53,8 @@ Ask before:
 
 ## 6. After Completing Work
 
-- Tick the completed tasks in the relevant phase issue file.
-- Update `specs/progress.status.md` with phase status, evidence, and next action.
+- Tick the completed tasks in the relevant maintenance issue file.
+- Update `specs/progress.status.md` with work-item status, evidence, and next action.
 - If docs become stale due to implementation decisions, update them in the same session.
 - Brief summary of what changed, what was tested (or manually verified), and any remaining risks.
 
@@ -67,4 +68,4 @@ Ask before:
 | New module added | `docs/01-architecture.md` Module Responsibilities table + Repository Layout |
 | Threading boundary changed | `docs/01-architecture.md` §5 Threading Model |
 | New architectural decision | `docs/01-architecture.md` §7 Architectural Decisions |
-| Phase completed | `specs/progress.status.md` |
+| Maintenance item completed | `specs/progress.status.md` |

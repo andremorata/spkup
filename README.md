@@ -2,7 +2,7 @@
 
 Push-to-talk speech-to-text for Windows. Hold a hotkey or single-click the tray icon, speak, release or click again — transcribed text lands in your clipboard.
 
-Planned distribution note: Phase 9 defines the release contract and documentation baseline, but packaging and GitHub release automation are still to be implemented.
+Maintenance mode note: the original MVP is now treated as complete and frozen as a historical baseline. New non-trivial work should be tracked in `specs/` as a new spec or requirement, not by extending `phase1` through `phase9`.
 
 - Global hotkey (configurable, default `Ctrl+Shift+Space`)
 - Single left-click tray icon toggle for record / stop
@@ -43,7 +43,7 @@ The project uses one release version contract:
 - Git release tags must be `vX.Y.Z` for the same source version
 - Initial Windows release artifacts should derive from that same version, for example `spkup-X.Y.Z-windows-x64.zip`
 
-Until Phase 9 packaging automation exists, this is a documented operator workflow rather than an automated pipeline.
+The repository also has tagged-release automation, but the versioning contract above remains the single source of truth for release preparation.
 
 ---
 
@@ -54,7 +54,7 @@ Until Phase 9 packaging automation exists, this is a documented operator workflo
 | [docs/01-architecture.md](docs/01-architecture.md) | Component diagram, signal flow, threading model, module responsibilities |
 | [docs/02-observability.md](docs/02-observability.md) | Logging config, log levels, troubleshooting |
 | [docs/03-testing.md](docs/03-testing.md) | What gets unit tests, what gets manual verification, TDD rules |
-| [docs/04-delivery-workflow.md](docs/04-delivery-workflow.md) | Phase lifecycle, definition of done, phase map |
+| [docs/04-delivery-workflow.md](docs/04-delivery-workflow.md) | Maintenance workflow, definition of done, historical MVP roadmap |
 | [docs/05-ai-agent-workflow.md](docs/05-ai-agent-workflow.md) | Rules for AI agents working in this repo |
 | [docs/06-packaging-release.md](docs/06-packaging-release.md) | Versioning contract, Windows artifact baseline, operator release workflow |
 
@@ -63,5 +63,6 @@ Until Phase 9 packaging automation exists, this is a documented operator workflo
 | File | Contents |
 |---|---|
 | [specs/project.plan.md](specs/project.plan.md) | Full project plan: stack, assumptions, and the full delivery roadmap |
-| [specs/progress.status.md](specs/progress.status.md) | Current phase status and validation evidence |
-| [specs/phase1.issue.md](specs/phase1.issue.md) — [phase9](specs/phase9.issue.md) | Per-phase tasks and acceptance criteria for the currently tracked delivery phases |
+| [specs/progress.status.md](specs/progress.status.md) | Current maintenance status, historical MVP baseline, and validation evidence |
+| [specs/spec-template.issue.md](specs/spec-template.issue.md) | Template for new post-MVP specs, extensions, and requirements |
+| [specs/phase1.issue.md](specs/phase1.issue.md) — [phase9](specs/phase9.issue.md) | Historical MVP phase records kept for reference; do not extend with new scope |
