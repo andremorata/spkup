@@ -10,6 +10,7 @@ permissions:
 
 jobs:
   release-windows:
+    if: github.actor != 'github-actions[bot]'
     runs-on: windows-latest
 
     env:

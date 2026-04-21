@@ -21,7 +21,9 @@
 
 ## Open Maintenance Board
 
-No open specs or requirement issues are currently tracked. The next approved incremental change should begin by creating a new issue file in `specs/`, usually from `specs/spec-template.issue.md`.
+| Work Item | File | Status | GitHub Issue | Last Updated | Notes |
+| --- | --- | --- | --- | --- | --- |
+| Nightly Release Automation | `specs/spec-nightly-release-automation.issue.md` | Completed (declared) | [#1](https://github.com/andremorata/spkup/issues/1) | 2026-04-20 | `.github/workflows/nightly.yml` created; `release.yml` guarded with `github.actor` check. Pending first live schedule run for validation. |
 
 ## Historical MVP Roadmap
 

@@ -1,0 +1,162 @@
+name: Nightly Release
+
+on:
+  schedule:
+    - cron: '0 20 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  nightly:
+    runs-on: windows-latest
+
+    env:
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for changes since last release
+        id: changes
+        shell: pwsh
+        run: |
+          $latestTag = git describe --tags --abbrev=0 --match "v*" 2>$null
+          if ($LASTEXITCODE -ne 0 -or -not $latestTag) {
+            Write-Host "No v* tags found. Treating as first release."
+            "has_changes=true" >> $env:GITHUB_OUTPUT
+          } else {
+            $commits = git log "$latestTag..HEAD" --oneline
+            if (-not $commits) {
+              Write-Host "No new commits since $latestTag. Skipping release."
+              "has_changes=false" >> $env:GITHUB_OUTPUT
+            } else {
+              Write-Host "New commits since $latestTag. Proceeding with release."
+              "has_changes=true" >> $env:GITHUB_OUTPUT
+            }
+          }
+
+      - name: Set up Python
+        if: steps.changes.outputs.has_changes == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Resolve version
+        id: version
+        if: steps.changes.outputs.has_changes == 'true'
+        shell: pwsh
+        run: |
+          $currentVersion = python -c "namespace = {}; exec(compile(open('src/spkup/__init__.py', encoding='utf-8').read(), 'src/spkup/__init__.py', 'exec'), namespace); print(namespace['__version__'])"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to read __version__ from src/spkup/__init__.py"
+          }
+
+          $existingTag = git tag -l "v$currentVersion"
+
+          if (-not $existingTag) {
+            Write-Host "Tag v$currentVersion does not exist. Reusing version (recovery mode)."
+            $newVersion = $currentVersion
+          } else {
+            $parts = $currentVersion -split '\.'
+            $newVersion = "$($parts[0]).$($parts[1]).$([int]$parts[2] + 1)"
+            Write-Host "Bumping version from $currentVersion to $newVersion"
+
+            $raw = Get-Content "src/spkup/__init__.py" -Raw -Encoding UTF8
+            $raw = $raw -replace '__version__\s*=\s*["'']\d+\.\d+\.\d+["'']', "__version__ = `"$newVersion`""
+            Set-Content -Path "src/spkup/__init__.py" -Value $raw -Encoding UTF8 -NoNewline
+
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add src/spkup/__init__.py
+            git commit -m "chore: bump version to $newVersion [skip ci]"
+            git push origin HEAD:main
+          }
+
+          "version=$newVersion" >> $env:GITHUB_OUTPUT
+          "tag_name=v$newVersion" >> $env:GITHUB_OUTPUT
+
+      - name: Install dependencies and run test suite
+        if: steps.changes.outputs.has_changes == 'true'
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev,build]"
+          python -m pytest tests/ -v
+
+      - name: Capture release date
+        id: date
+        if: steps.changes.outputs.has_changes == 'true'
+        shell: pwsh
+        run: |
+          $date = Get-Date -Format 'yyyy-MM-dd'
+          "date=$date" >> $env:GITHUB_OUTPUT
+
+      - name: Build Windows artifact with PyInstaller
+        if: steps.changes.outputs.has_changes == 'true'
+        shell: pwsh
+        run: |
+          foreach ($path in @('build', 'dist')) {
+            if (Test-Path $path) {
+              Remove-Item $path -Recurse -Force
+            }
+          }
+          python -m PyInstaller --clean spkup.spec
+
+      - name: Package release archive
+        id: package
+        if: steps.changes.outputs.has_changes == 'true'
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $bundleName = "spkup-$version-windows-x64"
+          $distDir = Join-Path $PWD 'dist'
+          $srcBundle = Join-Path $distDir 'spkup'
+
+          if (-not (Test-Path $srcBundle)) {
+            throw "Expected PyInstaller bundle at $srcBundle"
+          }
+
+          $dstBundle = Join-Path $distDir $bundleName
+          if (Test-Path $dstBundle) {
+            Remove-Item $dstBundle -Recurse -Force
+          }
+
+          Rename-Item -Path $srcBundle -NewName $bundleName
+
+          $archivePath = Join-Path $distDir "$bundleName.zip"
+          if (Test-Path $archivePath) {
+            Remove-Item $archivePath -Force
+          }
+
+          Compress-Archive -Path $dstBundle -DestinationPath $archivePath -CompressionLevel Optimal
+
+          if (-not (Test-Path $archivePath)) {
+            throw "Expected release archive at $archivePath"
+          }
+
+          "archive_path=$archivePath" >> $env:GITHUB_OUTPUT
+
+      - name: Create and push release tag
+        if: steps.changes.outputs.has_changes == 'true'
+        shell: pwsh
+        run: |
+          git tag -a "${{ steps.version.outputs.tag_name }}" -m "Release ${{ steps.version.outputs.tag_name }} (nightly)"
+          git push origin "${{ steps.version.outputs.tag_name }}"
+
+      - name: Publish GitHub pre-release
+        if: steps.changes.outputs.has_changes == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag_name }}
+          name: "spkup v${{ steps.version.outputs.version }} (nightly ${{ steps.date.outputs.date }})"
+          prerelease: true
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: ${{ steps.package.outputs.archive_path }}
