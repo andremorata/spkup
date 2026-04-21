@@ -18,7 +18,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -43,7 +43,7 @@ jobs:
 
       - name: Set up Python
         if: steps.changes.outputs.has_changes == 'true'
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
@@ -147,6 +147,8 @@ jobs:
         if: steps.changes.outputs.has_changes == 'true'
         shell: pwsh
         run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag -a "${{ steps.version.outputs.tag_name }}" -m "Release ${{ steps.version.outputs.tag_name }} (nightly)"
           git push origin "${{ steps.version.outputs.tag_name }}"
 
