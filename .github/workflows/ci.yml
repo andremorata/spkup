@@ -21,10 +21,10 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -71,7 +71,7 @@ jobs:
 
       - name: Upload Windows frozen build artifact
         if: success()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windows-frozen-build-${{ steps.package_meta.outputs.version }}
           path: dist/${{ steps.package_meta.outputs.archive_name }}
@@ -81,7 +81,7 @@ jobs:
 
       - name: Upload packaging diagnostics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windows-packaging-diagnostics-${{ github.run_number }}
           path: |

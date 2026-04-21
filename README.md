@@ -2,8 +2,6 @@
 
 Push-to-talk speech-to-text for Windows. Hold a hotkey or single-click the tray icon, speak, release or click again — transcribed text lands in your clipboard.
 
-Maintenance mode note: the original MVP is now treated as complete and frozen as a historical baseline. New non-trivial work should be tracked in `specs/` as a new spec or requirement, not by extending `phase1` through `phase9`.
-
 - Global hotkey (configurable, default `Ctrl+Shift+Space`)
 - Single left-click tray icon toggle for record / stop
 - Local Whisper inference via [faster-whisper](https://github.com/SYSTRAN/faster-whisper) — no cloud, no API key
