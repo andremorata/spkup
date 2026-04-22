@@ -122,4 +122,6 @@ Hotkey tapped again → recording_stopped → Recorder.stop()
 - [x] Observability approach agreed (file logging)
 - [x] Maintenance mode decision documented
 - [x] Post-MVP spec / requirement workflow defined
-- [ ] Next maintenance item opened in `specs/` when the next approved change arrives
+- [x] Nightly release automation maintenance item opened in `specs/`
+- [x] Manual cancellation of in-progress transcription maintenance item opened in `specs/`
+- [ ] Manual cancellation of in-progress transcription delivered as a hotkey-first slice with a shared app-level cancel entry point ready for a future overlay button

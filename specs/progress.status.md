@@ -5,9 +5,9 @@
 ## Current Snapshot
 
 - Lifecycle mode: Maintenance
-- Active work item: None open in `specs/` yet; create a new spec / requirement for the next non-trivial change
+- Active work item: Manual cancellation of in-progress transcription (`specs/spec-transcription-manual-cancel.issue.md`)
 - MVP baseline: Closed and frozen as historical reference
-- Last updated: 2026-04-20
+- Last updated: 2026-04-22
 - Primary risks: PyQt6 system-tray behaviour differences across Windows builds; CUDA availability for faster-whisper at runtime
 
 ## Status Vocabulary
@@ -23,6 +23,7 @@
 
 | Work Item | File | Status | GitHub Issue | Last Updated | Notes |
 | --- | --- | --- | --- | --- | --- |
+| Manual Cancellation of In-Progress Transcription | `specs/spec-transcription-manual-cancel.issue.md` | Completed (declared) | TBD | 2026-04-22 | Hotkey-first slice shipped. Discard-only cancel via `App._cancel_active_transcription`; tray click during transcription is routed through the same entry point. Overlay cancel button remains future work. Manual Windows verification pending. |
 | Nightly Release Automation | `specs/spec-nightly-release-automation.issue.md` | Completed (declared) | [#1](https://github.com/andremorata/spkup/issues/1) | 2026-04-20 | `.github/workflows/nightly.yml` created; `release.yml` guarded with `github.actor` check. Pending first live schedule run for validation. |
 
 ## Historical MVP Roadmap
@@ -50,6 +51,8 @@ To mark a maintenance work item as `Completed (validated)`, record:
 
 ## Evidence Log
 
+- 2026-04-22: Manual Cancellation of In-Progress Transcription — hotkey-first slice implemented. `Transcriber.clear_retry_state()` added. `App._transcribing_active` state plus `App._cancel_active_transcription(source)` added as the single app-level cancel entry point. `_request_recording_start` now routes hotkey and tray start triggers received during transcription through cancel instead of starting a new recording. Retained audio is cleared on cancel so retry is not offered, the overlay returns to HIDDEN, the watchdog is stopped, and the existing 1-second trigger-suppression window is armed. No overlay affordance was added in this slice; a future overlay cancel button must call `_cancel_active_transcription`. Delivery classification: discard-only (late worker results are ignored via existing job-id logic; the inference thread is not hard-killed). New tests: `tests/test_app_transcription_cancel.py` (17). `tests/test_app_trigger_guards.py` stub updated to seed `_transcribing_active`. Automated validation: `$env:PYTHONPATH='src'; .\.venv\Scripts\python -m pytest tests/ -q` passed 162/162. Manual Windows verification of end-to-end cancel gesture, overlay transitions, and clean restart after cancel is still pending.
+- 2026-04-22: Opened a new maintenance spec for manual cancellation of in-progress transcription: `specs/spec-transcription-manual-cancel.issue.md`. Recommendation recorded: implement hotkey-first cancellation during transcription only, while preserving existing watchdog, retry, error, history, clipboard, and trigger-guard flows and keeping a future overlay cancel button on the same App-level cancel entry point. This was a planning/spec update only; no implementation or validation was performed in this session.
 - 2026-04-01: Phase 1 validated. Requirements install passed; editable install passed after hatchling backend fix; `pytest tests/test_config.py -v` passed (4/4); `python -m spkup` started successfully.
 - 2026-04-01: Phase 2 validated. `tests/test_hotkey.py` passed 10/10; `python -m spkup` confirmed single start/stop per hotkey gesture, no repeat flooding.
 - 2026-04-01: Phase 3 validated. `pytest tests/test_recorder.py` 4/4 passed; full suite 18/18 passed; `from spkup.app import App` imports cleanly; no diagnostics in recorder.py, app.py, or test_recorder.py.

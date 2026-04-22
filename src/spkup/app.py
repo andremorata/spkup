@@ -96,6 +96,7 @@ class App(QObject):
         self._listener_active = False
         self._recording_start_pending = False
         self._recording_active = False
+        self._transcribing_active = False
         self._start_trigger_suppression_until = 0.0
 
         # Core components
@@ -358,6 +359,14 @@ class App(QObject):
         return current_time < self._start_trigger_suppression_until
 
     def _request_recording_start(self, source: str) -> None:
+        if self._transcribing_active:
+            _log.info(
+                "Routing %s start trigger to cancel active transcription",
+                source,
+            )
+            self._cancel_active_transcription(source)
+            return
+
         if self._recording_active or self._recording_start_pending:
             _log.debug(
                 "Ignoring %s start trigger: recording already active=%s pending=%s",
@@ -377,6 +386,39 @@ class App(QObject):
             return
 
         self._on_recording_started()
+
+    def _cancel_active_transcription(self, source: str) -> bool:
+        """Single App-level cancel entry point for an in-progress transcription.
+
+        Only succeeds when the app is in the transcribing state. Discards the
+        active worker result, clears retained retry audio, hides the overlay,
+        and arms the start-trigger suppression window so the cancel gesture
+        itself does not bounce the app straight back into recording.
+
+        Returns ``True`` when a cancel was actually performed. Future overlay
+        cancel buttons should route here rather than duplicating teardown.
+        """
+        if not self._transcribing_active:
+            _log.debug(
+                "Ignoring %s cancel request: not currently transcribing",
+                source,
+            )
+            return False
+
+        _log.info("Cancelling active transcription (source=%s)", source)
+        self._transcribing_active = False
+        self._stop_transcription_watchdog()
+        self._timeout_was_cuda_retry = False
+
+        transcriber = getattr(self, "_transcriber", None)
+        if transcriber is not None:
+            transcriber.cancel_active()
+            transcriber.clear_retry_state()
+
+        self._set_retry_action_enabled(False)
+        self._overlay.show_state(OverlayState.HIDDEN)
+        self._arm_start_trigger_suppression()
+        return True
 
     def _request_recording_stop(self, source: str) -> None:
         if not self._recording_active and not self._recording_start_pending:
@@ -480,6 +522,7 @@ class App(QObject):
         self._recording_active = False
         self._recorder.stop()
         self._restore_playback_mute()
+        self._transcribing_active = True
         self._overlay.show_state(OverlayState.TRANSCRIBING)
         self._timeout_was_cuda_retry = False
         self._start_transcription_watchdog()
@@ -526,6 +569,7 @@ class App(QObject):
 
     def _on_transcription_finished(self, text: str) -> None:
         self._stop_transcription_watchdog()
+        self._transcribing_active = False
         self._arm_start_trigger_suppression()
         stripped = text.strip()
         duration = self._last_recording_duration
@@ -569,6 +613,7 @@ class App(QObject):
 
     def _on_transcription_error(self, msg: str) -> None:
         self._stop_transcription_watchdog()
+        self._transcribing_active = False
         self._arm_start_trigger_suppression()
         _log.error("Transcription error: %s", msg)
         self._overlay.show_state(OverlayState.ERROR)
@@ -596,10 +641,12 @@ class App(QObject):
             _log.info("Auto-retrying transcription on CPU after timeout")
             self._timeout_was_cuda_retry = True
             if self._transcriber.retry_last(force_cpu=True):
+                self._transcribing_active = True
                 self._overlay.show_state(OverlayState.TRANSCRIBING)
                 self._start_transcription_watchdog()
                 return
 
+        self._transcribing_active = False
         self._timeout_was_cuda_retry = False
         self._arm_start_trigger_suppression()
         self._overlay.show_state(OverlayState.ERROR)
@@ -615,6 +662,7 @@ class App(QObject):
     def _on_retry_last(self) -> None:
         if self._transcriber.retry_last():
             _log.info("Retrying last transcription")
+            self._transcribing_active = True
             self._overlay.show_state(OverlayState.TRANSCRIBING)
             self._timeout_was_cuda_retry = False
             self._start_transcription_watchdog()
@@ -637,6 +685,7 @@ class App(QObject):
         self._recording_start_pending = False
         watchdog = getattr(self, "_transcription_watchdog", None)
         self._recording_active = False
+        self._transcribing_active = False
         self._recorder.stop()
         transcriber = getattr(self, "_transcriber", None)
         if transcriber is not None:

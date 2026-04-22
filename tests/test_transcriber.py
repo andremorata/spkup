@@ -112,27 +112,81 @@ def test_audio_retained_after_transcribe_start() -> None:
 def test_audio_cleared_on_success() -> None:
     """_on_worker_finished clears the retained audio; has_pending_retry becomes False."""
     t = Transcriber(AppConfig())
+    emitted: list[str] = []
+    t.transcription_finished.connect(emitted.append)
     t._last_audio = np.zeros(100, dtype=np.float32)
     t._last_params = {"model_size": "large-v3", "device": "cuda", "compute_type": "int8"}
+    t._active_job_id = 1
     t._worker = None
 
-    t._on_worker_finished("hello")
+    t._on_worker_finished(1, "hello")
 
     assert t.has_pending_retry is False
     assert t._last_audio is None
+    assert emitted == ["hello"]
 
 
 def test_audio_retained_on_error() -> None:
     """_on_worker_error does NOT clear retained audio so a retry is still possible."""
     t = Transcriber(AppConfig())
+    emitted: list[str] = []
+    t.transcription_error.connect(emitted.append)
     audio = np.zeros(100, dtype=np.float32)
     t._last_audio = audio
     t._last_params = {"model_size": "large-v3", "device": "cuda", "compute_type": "int8"}
+    t._active_job_id = 1
     t._worker = None
 
-    t._on_worker_error("cuda timeout")
+    t._on_worker_error(1, "cuda timeout")
 
     assert t.has_pending_retry is True
+    assert emitted == ["cuda timeout"]
+
+
+def test_cancel_active_returns_false_without_running_worker() -> None:
+    t = Transcriber(AppConfig())
+
+    assert t.cancel_active() is False
+
+
+def test_cancel_active_discards_late_success() -> None:
+    t = Transcriber(AppConfig())
+    emitted: list[str] = []
+    t.transcription_finished.connect(emitted.append)
+    t._last_audio = np.zeros(100, dtype=np.float32)
+    t._last_params = {"model_size": "large-v3", "device": "cuda", "compute_type": "int8"}
+    worker = MagicMock()
+    worker.isRunning.return_value = True
+    t._worker = worker
+    t._active_job_id = 7
+
+    assert t.cancel_active() is True
+
+    t._on_worker_finished(7, "late result")
+
+    assert emitted == []
+    assert t.has_pending_retry is True
+    assert t._worker is None
+
+
+def test_cancel_active_discards_late_error() -> None:
+    t = Transcriber(AppConfig())
+    emitted: list[str] = []
+    t.transcription_error.connect(emitted.append)
+    t._last_audio = np.zeros(100, dtype=np.float32)
+    t._last_params = {"model_size": "large-v3", "device": "cuda", "compute_type": "int8"}
+    worker = MagicMock()
+    worker.isRunning.return_value = True
+    t._worker = worker
+    t._active_job_id = 7
+
+    assert t.cancel_active() is True
+
+    t._on_worker_error(7, "late error")
+
+    assert emitted == []
+    assert t.has_pending_retry is True
+    assert t._worker is None
 
 
 def test_retry_last_basic() -> None:

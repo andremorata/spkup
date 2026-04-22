@@ -141,6 +141,9 @@ class Transcriber(QObject):
         super().__init__()
         self._config = config
         self._worker: _TranscriptionWorker | None = None
+        self._active_job_id: int | None = None
+        self._next_job_id = 0
+        self._detached_workers: set[_TranscriptionWorker] = set()
         self._last_audio: np.ndarray | None = None
         self._last_params: dict[str, str] | None = None
 
@@ -167,6 +170,32 @@ class Transcriber(QObject):
         }
         self._start_worker(audio, model_size, device, compute_type)
 
+    def cancel_active(self) -> bool:
+        """Discard the active job so any late result is ignored by the facade.
+
+        This is a discard-only contract for the current worker. Callers own any
+        user-facing cancel state transition and can start a replacement job
+        later; late success or error signals from the discarded worker are
+        ignored.
+        """
+        worker = self._worker
+        if worker is None:
+            return False
+
+        if not worker.isRunning():
+            self.cleanup_worker()
+            return False
+
+        job_id = self._active_job_id
+        if job_id is None:
+            return False
+
+        _log.info("Discarding active transcription job %s", job_id)
+        self._detach_worker(worker)
+        self._worker = None
+        self._active_job_id = None
+        return True
+
     def retry_last(self, *, force_cpu: bool = False) -> bool:
         if self._last_audio is None or self._last_params is None:
             return False
@@ -191,13 +220,104 @@ class Transcriber(QObject):
         self._start_worker(self._last_audio, model_size, device, compute_type)
         return True
 
+    def clear_retry_state(self) -> None:
+        """Forget the last audio/params so manual retry is no longer offered.
+
+        Used after a user-initiated cancel so the retained buffer for the
+        canceled job does not power a later "Retry last transcription" action.
+        Does not touch the active worker — pair with ``cancel_active()`` when
+        aborting an in-flight job.
+        """
+        self._last_audio = None
+        self._last_params = None
+
     def cleanup_worker(self) -> None:
         worker = self._worker
-        if worker is None:
+        if worker is not None:
+            self._disconnect_worker_signals(worker)
+            self._stop_worker(worker)
+            if self._worker is worker:
+                self._worker = None
+            if self._active_job_id == getattr(worker, "_job_id", None):
+                self._active_job_id = None
+
+        detached_workers = tuple(self._detached_workers)
+        self._detached_workers.clear()
+        for detached_worker in detached_workers:
+            self._disconnect_worker_signals(detached_worker)
+            self._disconnect_worker_cleanup(detached_worker)
+            self._stop_worker(detached_worker)
+
+    def _start_worker(
+        self,
+        audio: np.ndarray,
+        model_size: str,
+        device: str,
+        compute_type: str,
+    ) -> None:
+        self._next_job_id += 1
+        job_id = self._next_job_id
+        worker = _TranscriptionWorker(audio, model_size, device, compute_type)
+        worker._job_id = job_id
+        worker._finished_slot = lambda text, job_id=job_id: self._on_worker_finished(
+            job_id, text
+        )
+        worker._error_slot = lambda message, job_id=job_id: self._on_worker_error(
+            job_id, message
+        )
+        self._worker = worker
+        self._active_job_id = job_id
+        worker.finished.connect(worker._finished_slot)
+        worker.error.connect(worker._error_slot)
+        worker.start()
+
+    def _disconnect_worker_signals(self, worker: _TranscriptionWorker) -> None:
+        for signal, slot in (
+            (worker.finished, getattr(worker, "_finished_slot", None)),
+            (worker.error, getattr(worker, "_error_slot", None)),
+        ):
+            if slot is None:
+                continue
+            try:
+                signal.disconnect(slot)
+            except (TypeError, RuntimeError):
+                pass
+
+    def _disconnect_worker_cleanup(self, worker: _TranscriptionWorker) -> None:
+        cleanup_slot = getattr(worker, "_cleanup_slot", None)
+        if cleanup_slot is None:
             return
 
+        for signal in (worker.finished, worker.error):
+            try:
+                signal.disconnect(cleanup_slot)
+            except (TypeError, RuntimeError):
+                pass
+
+    def _detach_worker(self, worker: _TranscriptionWorker) -> None:
         self._disconnect_worker_signals(worker)
 
+        cleanup_slot = getattr(worker, "_cleanup_slot", None)
+        if cleanup_slot is None:
+            cleanup_slot = (
+                lambda *_args, worker=worker: self._cleanup_detached_worker(worker)
+            )
+            worker._cleanup_slot = cleanup_slot
+            worker.finished.connect(cleanup_slot)
+            worker.error.connect(cleanup_slot)
+
+        self._detached_workers.add(worker)
+
+    def _cleanup_detached_worker(self, worker: _TranscriptionWorker) -> None:
+        if worker not in self._detached_workers:
+            return
+
+        self._detached_workers.discard(worker)
+        self._disconnect_worker_cleanup(worker)
+        worker.wait(2000)
+        worker.deleteLater()
+
+    def _stop_worker(self, worker: _TranscriptionWorker) -> None:
         if worker.isRunning():
             _log.warning("Terminating transcription worker thread")
             worker.terminate()
@@ -207,38 +327,23 @@ class Transcriber(QObject):
             worker.wait(2000)
 
         worker.deleteLater()
-        if self._worker is worker:
-            self._worker = None
 
-    def _start_worker(
-        self,
-        audio: np.ndarray,
-        model_size: str,
-        device: str,
-        compute_type: str,
-    ) -> None:
-        worker = _TranscriptionWorker(audio, model_size, device, compute_type)
-        self._worker = worker
-        worker.finished.connect(self._on_worker_finished)
-        worker.error.connect(self._on_worker_error)
-        worker.start()
+    def _on_worker_finished(self, job_id: int, text: str) -> None:
+        if job_id != self._active_job_id:
+            _log.info("Ignoring completed transcription from inactive job %s", job_id)
+            return
 
-    def _disconnect_worker_signals(self, worker: _TranscriptionWorker) -> None:
-        for signal, slot in (
-            (worker.finished, self._on_worker_finished),
-            (worker.error, self._on_worker_error),
-        ):
-            try:
-                signal.disconnect(slot)
-            except (TypeError, RuntimeError):
-                pass
-
-    def _on_worker_finished(self, text: str) -> None:
+        self._active_job_id = None
         self._last_audio = None
         self._last_params = None
         self.cleanup_worker()
         self.transcription_finished.emit(text)
 
-    def _on_worker_error(self, message: str) -> None:
+    def _on_worker_error(self, job_id: int, message: str) -> None:
+        if job_id != self._active_job_id:
+            _log.info("Ignoring transcription error from inactive job %s", job_id)
+            return
+
+        self._active_job_id = None
         self.cleanup_worker()
         self.transcription_error.emit(message)

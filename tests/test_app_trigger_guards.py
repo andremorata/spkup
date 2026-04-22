@@ -17,11 +17,13 @@ def _make_request_stub_app(
     recording_active: bool = False,
     recording_start_pending: bool = False,
     suppression_until: float = 0.0,
+    transcribing_active: bool = False,
 ) -> App:
     app = QObject.__new__(App)
     QObject.__init__(app)
     app._recording_active = recording_active
     app._recording_start_pending = recording_start_pending
+    app._transcribing_active = transcribing_active
     app._start_trigger_suppression_until = suppression_until
     app._on_recording_started = MagicMock()
     app._on_recording_stopped = MagicMock()

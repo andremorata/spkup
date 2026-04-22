@@ -58,7 +58,7 @@ flowchart TD
 | `model_manager.py` | `ModelManager` | Cache dir management; `is_downloaded`; `_ModelDownloadWorker` for HuggingFace downloads |
 | `overlay.py` | `OverlayWidget` | Frameless always-on-top click-through widget; RECORDING / TRANSCRIBING / DONE states |
 | `clipboard.py` | `copy_to_clipboard` | `QApplication.clipboard().setText()` — Unicode-safe |
-| `app.py` | `App` | `QApplication` + `QSystemTrayIcon`; instantiates all components; wires all signals; owns tray click recording toggle and trigger suppression |
+| `app.py` | `App` | `QApplication` + `QSystemTrayIcon`; instantiates all components; wires all signals; owns tray click recording toggle, trigger suppression, and the single `_cancel_active_transcription` entry point that discards an in-progress transcription (used today by the hotkey/tray start-trigger routing during the transcribing state, and reserved for a future overlay cancel button) |
 | `settings_dialog.py` | `SettingsDialog` | Hotkey capture, model picker, device selector, overlay position, playback-mute toggle; reinitializes components on save |
 | `transcription_history.py` | `TranscriptionHistory` | Session-scoped in-memory store of the last 5 completed transcriptions |
 | `transcription_history.py` | `TranscriptionHistoryEntry` | Immutable history item with stable session-local id and text |
