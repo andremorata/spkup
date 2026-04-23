@@ -23,7 +23,12 @@ from PyQt6.QtWidgets import (
 from spkup.audio_devices import list_input_devices, spec_from_device
 from spkup.config import AppConfig, save
 from spkup.hotkey import parse_hotkey
-from spkup.model_manager import _ModelDownloadWorker, is_downloaded
+from spkup.model_manager import (
+    _ModelDownloadWorker,
+    delete_model,
+    format_model_size,
+    is_downloaded,
+)
 from spkup.overlay import OverlayState, _STATE_COLORS
 
 
@@ -283,7 +288,9 @@ class SettingsDialog(QDialog):
         self._model_combo = QComboBox()
         for m in _MODELS:
             badge = "✓" if is_downloaded(m) else "↓"
-            self._model_combo.addItem(f"{badge}  {m}", m)
+            size = format_model_size(m)
+            suffix = f" ({size})" if size else ""
+            self._model_combo.addItem(f"{badge}  {m}{suffix}", m)
         idx = _MODELS.index(config.model_size) if config.model_size in _MODELS else 0
         self._model_combo.setCurrentIndex(idx)
         self._model_combo.currentIndexChanged.connect(self._on_model_changed)
@@ -291,9 +298,18 @@ class SettingsDialog(QDialog):
         self._download_btn = QPushButton("Download")
         self._download_btn.clicked.connect(self._on_download)
         self._download_btn.setVisible(not is_downloaded(config.model_size))
+        self._download_btn.setToolTip(self._download_tooltip(config.model_size))
+
+        self._delete_btn = QPushButton("Delete")
+        self._delete_btn.clicked.connect(self._on_delete)
+        self._delete_btn.setVisible(is_downloaded(config.model_size))
+        self._delete_btn.setToolTip(
+            "Remove this model from the local cache to free disk space."
+        )
 
         model_row_layout.addWidget(self._model_combo, 1)
         model_row_layout.addWidget(self._download_btn)
+        model_row_layout.addWidget(self._delete_btn)
         gen_layout.addWidget(model_row)
 
         # ── Microphone ───────────────────────────────────────────────────────
@@ -494,19 +510,42 @@ class SettingsDialog(QDialog):
     def _on_model_changed(self, index: int) -> None:
         model_size = self._model_combo.currentData()
         self._config.model_size = model_size
-        self._download_btn.setVisible(not is_downloaded(model_size))
+        downloaded = is_downloaded(model_size)
+        self._download_btn.setVisible(not downloaded)
+        self._download_btn.setToolTip(self._download_tooltip(model_size))
+        self._delete_btn.setVisible(downloaded)
+
+    def _download_tooltip(self, model_size: str) -> str:
+        size = format_model_size(model_size)
+        if size:
+            return f"Download the {model_size} model ({size})."
+        return f"Download the {model_size} model."
+
+    def _set_combo_badge(self, model_size: str, badge: str) -> None:
+        """Update the currently selected combo row with a new badge prefix."""
+        idx = self._model_combo.currentIndex()
+        size = format_model_size(model_size)
+        suffix = f" ({size})" if size else ""
+        self._model_combo.setItemText(idx, f"{badge}  {model_size}{suffix}")
 
     def _on_download(self) -> None:
         model_size = self._model_combo.currentData()
 
-        self._progress_dlg = QProgressDialog(
-            f"Downloading {model_size}…", "Cancel", 0, 100, self
+        size_hint = format_model_size(model_size)
+        label = (
+            f"Downloading {model_size}"
+            + (f" ({size_hint})" if size_hint else "")
+            + "…\nThis can take a while."
         )
+        # Indeterminate busy indicator: huggingface_hub does not expose a
+        # byte-level progress callback that works in the windowed build,
+        # and file-by-file jumps stall on the big model file. A marquee
+        # bar is a more honest signal that work is ongoing.
+        self._progress_dlg = QProgressDialog(label, "Cancel", 0, 0, self)
         self._progress_dlg.setWindowModality(Qt.WindowModality.WindowModal)
-        self._progress_dlg.setValue(0)
+        self._progress_dlg.setMinimumDuration(0)
 
         self._download_worker = _ModelDownloadWorker(model_size)
-        self._download_worker.progress.connect(self._progress_dlg.setValue)
         self._download_worker.finished.connect(self._on_download_done)
         self._download_worker.error.connect(self._on_download_error)
         self._progress_dlg.canceled.connect(self._download_worker.terminate)
@@ -515,17 +554,51 @@ class SettingsDialog(QDialog):
 
     def _on_download_done(self) -> None:
         if self._progress_dlg is not None:
-            self._progress_dlg.setValue(100)
             self._progress_dlg.close()
-        idx = self._model_combo.currentIndex()
         model_size = self._model_combo.currentData()
-        self._model_combo.setItemText(idx, f"✓  {model_size}")
+        self._set_combo_badge(model_size, "✓")
         self._download_btn.setVisible(False)
+        self._delete_btn.setVisible(True)
 
     def _on_download_error(self, msg: str) -> None:
         if self._progress_dlg is not None:
             self._progress_dlg.close()
         QMessageBox.critical(self, "Download failed", msg)
+
+    def _on_delete(self) -> None:
+        model_size = self._model_combo.currentData()
+        if not is_downloaded(model_size):
+            self._download_btn.setVisible(True)
+            self._delete_btn.setVisible(False)
+            return
+
+        size_hint = format_model_size(model_size)
+        detail = (
+            f"Remove the {model_size} model"
+            + (f" ({size_hint})" if size_hint else "")
+            + " from the local cache?\n\n"
+            "You can download it again later from this dialog."
+        )
+        reply = QMessageBox.question(
+            self,
+            "Delete model",
+            detail,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        try:
+            delete_model(model_size)
+        except (OSError, ValueError) as exc:
+            QMessageBox.critical(self, "Delete failed", str(exc))
+            return
+
+        self._set_combo_badge(model_size, "↓")
+        self._download_btn.setVisible(True)
+        self._download_btn.setToolTip(self._download_tooltip(model_size))
+        self._delete_btn.setVisible(False)
 
     def _on_save(self) -> None:
         self._preview_widget.stop_preview()

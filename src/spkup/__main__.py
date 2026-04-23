@@ -70,7 +70,26 @@ def _add_windows_dll_dirs() -> None:
         os.environ["PATH"] = os.pathsep.join(extra + [current_path]) if current_path else os.pathsep.join(extra)
 
 
+def _ensure_std_streams() -> None:
+    """Guard against ``sys.stdout``/``sys.stderr`` being ``None``.
+
+    PyInstaller windowed builds (``console=False``) detach the standard
+    streams, so any library that writes to them (e.g. ``tqdm`` used by
+    ``huggingface_hub`` during model downloads) raises
+    ``AttributeError: 'NoneType' object has no attribute 'write'``.
+    Redirect the missing streams to ``os.devnull`` so those writes become
+    harmless no-ops.
+    """
+    for name in ("stdout", "stderr"):
+        if getattr(sys, name, None) is None:
+            try:
+                setattr(sys, name, open(os.devnull, "w", encoding="utf-8"))
+            except OSError:
+                pass
+
+
 def _bootstrap() -> None:
+    _ensure_std_streams()
     _add_windows_dll_dirs()
 
     from spkup.logging_setup import configure_logging
