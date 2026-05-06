@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QProgressDialog,
     QPushButton,
+    QSpinBox,
     QTabWidget,
     QVBoxLayout,
     QWidget,
@@ -383,6 +384,23 @@ class SettingsDialog(QDialog):
             )
         )
         gen_layout.addWidget(self._mute_playback_checkbox)
+
+        # ── Model idle unload ─────────────────────────────────────────────────
+        gen_layout.addWidget(QLabel("Unload model after inactivity"))
+        self._idle_unload_spin = QSpinBox()
+        self._idle_unload_spin.setRange(0, 240)
+        self._idle_unload_spin.setSuffix(" min")
+        self._idle_unload_spin.setSpecialValueText("Never")
+        self._idle_unload_spin.setToolTip(
+            "Automatically unload the Whisper model from memory after this many "
+            "minutes of inactivity. Set to 0 to keep the model loaded indefinitely."
+        )
+        self._idle_unload_spin.setValue(config.model_idle_unload_minutes)
+        self._idle_unload_spin.valueChanged.connect(
+            lambda v: setattr(self._config, "model_idle_unload_minutes", v)
+        )
+        gen_layout.addWidget(self._idle_unload_spin)
+
         gen_layout.addStretch()
 
         tabs.addTab(general_tab, "General")

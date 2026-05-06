@@ -1,15 +1,42 @@
 from __future__ import annotations
 
 import logging
+import threading
 import time
 
 import numpy as np
-from PyQt6.QtCore import QObject, QThread, pyqtSignal
+from PyQt6.QtCore import QObject, QThread, QTimer, pyqtSignal
 
 from spkup.config import AppConfig
 from spkup.model_manager import ModelNotFoundError, is_downloaded, model_path
 
 _log = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Module-level model cache
+# ---------------------------------------------------------------------------
+# Keyed by (model_path_str, device, compute_type).  Only one entry is
+# expected at runtime (the active model), but the dict allows swapping
+# models when settings change without an explicit invalidation step.
+_model_cache: dict[tuple[str, str, str], object] = {}
+_model_cache_lock = threading.Lock()
+
+
+def _get_cached_model(key: tuple[str, str, str]) -> object | None:
+    with _model_cache_lock:
+        return _model_cache.get(key)
+
+
+def _set_cached_model(key: tuple[str, str, str], model: object) -> None:
+    with _model_cache_lock:
+        _model_cache[key] = model
+
+
+def unload_cached_model() -> None:
+    """Remove all cached model instances so RAM can be reclaimed."""
+    with _model_cache_lock:
+        _model_cache.clear()
+    _log.info("Whisper model unloaded from cache")
 
 
 def _should_fallback_to_cpu(device: str, exc: Exception) -> bool:
@@ -69,11 +96,18 @@ class _TranscriptionWorker(QThread):
         from faster_whisper import WhisperModel
 
         mp = str(model_path(self._model_size))
+        cache_key = (mp, self._device, self._compute_type)
+
+        cached = _get_cached_model(cache_key)
+        if cached is not None:
+            _log.debug("Reusing cached Whisper model")
+            return self._transcribe_with(cached)
 
         try:
             return self._load_and_transcribe(
                 WhisperModel,
                 mp,
+                cache_key=cache_key,
                 device=self._device,
                 compute_type=self._compute_type,
             )
@@ -83,9 +117,11 @@ class _TranscriptionWorker(QThread):
                     "CUDA transcription failed; falling back to CPU/int8: %s",
                     exc,
                 )
+                cpu_key = (mp, "cpu", "int8")
                 return self._load_and_transcribe(
                     WhisperModel,
                     mp,
+                    cache_key=cpu_key,
                     device="cpu",
                     compute_type="int8",
                 )
@@ -96,6 +132,7 @@ class _TranscriptionWorker(QThread):
         model_cls,
         model_path_str: str,
         *,
+        cache_key: tuple[str, str, str],
         device: str,
         compute_type: str,
     ) -> str:
@@ -111,6 +148,7 @@ class _TranscriptionWorker(QThread):
         model_load_started = time.monotonic()
         model = model_cls(model_path_str, device=device, compute_type=compute_type)
         _log.info("Model loaded in %.1f s", time.monotonic() - model_load_started)
+        _set_cached_model(cache_key, model)
         return self._transcribe_with(model)
 
     def _transcribe_with(self, model) -> str:
@@ -147,6 +185,31 @@ class Transcriber(QObject):
         self._last_audio: np.ndarray | None = None
         self._last_params: dict[str, str] | None = None
 
+        self._idle_unload_timer = QTimer(self)
+        self._idle_unload_timer.setSingleShot(True)
+        self._idle_unload_timer.timeout.connect(self._on_idle_unload_timeout)
+
+    def update_config(self, config: AppConfig) -> None:
+        """Apply updated settings without rebuilding the transcriber.
+
+        Refreshes the idle-unload timer interval immediately. If the timer
+        is currently running it is restarted with the new interval.
+        """
+        self._config = config
+        running = self._idle_unload_timer.isActive()
+        self._idle_unload_timer.stop()
+        if running and config.model_idle_unload_minutes > 0:
+            self._idle_unload_timer.start(config.model_idle_unload_minutes * 60_000)
+
+    def _restart_idle_timer(self) -> None:
+        self._idle_unload_timer.stop()
+        minutes = self._config.model_idle_unload_minutes
+        if minutes > 0:
+            self._idle_unload_timer.start(minutes * 60_000)
+
+    def _on_idle_unload_timeout(self) -> None:
+        unload_cached_model()
+
     @property
     def has_pending_retry(self) -> bool:
         return self._last_audio is not None
@@ -162,6 +225,7 @@ class Transcriber(QObject):
         device = self._config.device
         compute_type = self._config.compute_type
 
+        self._idle_unload_timer.stop()
         self._last_audio = audio
         self._last_params = {
             "model_size": model_size,
@@ -337,6 +401,7 @@ class Transcriber(QObject):
         self._last_audio = None
         self._last_params = None
         self.cleanup_worker()
+        self._restart_idle_timer()
         self.transcription_finished.emit(text)
 
     def _on_worker_error(self, job_id: int, message: str) -> None:
@@ -346,4 +411,5 @@ class Transcriber(QObject):
 
         self._active_job_id = None
         self.cleanup_worker()
+        self._restart_idle_timer()
         self.transcription_error.emit(message)

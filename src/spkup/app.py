@@ -250,6 +250,9 @@ class App(QObject):
                 self._on_transcription_finished
             )
             self._transcriber.transcription_error.connect(self._on_transcription_error)
+        else:
+            # Propagate config changes (e.g. idle-unload timeout) without rebuild.
+            self._transcriber.update_config(new_config)
 
         # Update input device if changed
         if old.input_device != new_config.input_device:

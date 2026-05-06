@@ -15,6 +15,7 @@ class AppConfig:
     max_recording_seconds: int = 120
     transcription_timeout_seconds: int = 300
     mute_playback_while_recording: bool = False
+    model_idle_unload_minutes: int = 0
     recording_animation: str = "equalizer_bars"
     transcribing_animation: str = "spinning_arc"
     done_animation: str = "checkmark_draw"
