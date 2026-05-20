@@ -8,6 +8,7 @@ Push-to-talk speech-to-text for Windows. Hold a hotkey or single-click the tray 
 - Mixed Portuguese + English support (auto-detect)
 - Always-on-top overlay with live remaining-time feedback during capture plus RECORDING / TRANSCRIBING / DONE states
 - Lives in the system tray; zero friction
+- Startup update checks against GitHub Releases, enabled by default and confirm-before-apply
 
 **Target machine:** Windows 11, Python 3.12, RTX 4070 (8 GB VRAM)
 
@@ -46,6 +47,8 @@ The project uses one release version contract:
 - Initial Windows release artifacts should derive from that same version, for example `spkup-X.Y.Z-windows-x64.zip`
 
 The repository also has tagged-release automation, but the versioning contract above remains the single source of truth for release preparation.
+
+Packaged Windows builds check GitHub Releases on startup by default. When a newer `spkup-X.Y.Z-windows-x64.zip` release is available, Spkup asks before downloading or applying it; the check can be disabled in Settings.
 
 ---
 

@@ -6,14 +6,14 @@
 
 ## 1. Overview
 
-spkup is a single-process Windows desktop application. There is no server, no database, no network API, and no web frontend. Everything runs locally on the user's machine.
+spkup is a single-process Windows desktop application. There is no server, no database, and no web frontend. Core transcription runs locally on the user's machine; the only runtime network path is the optional startup update check against GitHub Releases.
 
 - **Runtime:** Python 3.12, single process
 - **GUI framework:** PyQt6 — tray icon, overlay widget, settings dialog, clipboard
 - **Inference:** faster-whisper (CTranslate2, CUDA) — runs on a QThread worker
 - **Audio:** sounddevice (PortAudio) — 16 kHz mono float32, stays in memory as numpy arrays
 - **Hotkey:** pynput — background thread, marshalled to Qt main thread via QMetaObject
-- **Persistence:** JSON config file at `%APPDATA%/spkup/config.json`; model cache at `%LOCALAPPDATA%/spkup/models`
+- **Persistence:** JSON config file at `%APPDATA%/spkup/config.json`; model cache at `%LOCALAPPDATA%/spkup/models`; update staging at `%LOCALAPPDATA%/spkup/updates`
 - **Logging:** rotating file log at `%LOCALAPPDATA%/spkup/spkup.log`
 
 ---
@@ -42,6 +42,10 @@ flowchart TD
     App -- show_state --> OV[OverlayWidget\nframeless QWidget]
     App -- showMessage / setIcon --> TI
     App -- load / save --> CFG[AppConfig\nconfig.json]
+    App -- startup check --> UC[UpdateCheckWorker\nGitHub Releases]
+    UC -- UpdateInfo --> App
+    App -- confirm/download/apply --> UP[Updater\nstaged helper process]
+    UP -- download ZIP --> GH[GitHub Releases\nspkup-X.Y.Z-windows-x64.zip]
 ```
 
 ---
@@ -66,6 +70,8 @@ flowchart TD
 | `playback_mute.py` | `PlaybackMuteController` | Snapshots and restores the default playback mute state around a recording session |
 | `playback_mute.py` | `WindowsPlaybackMuteBackend` | Windows Core Audio mute backend for the default playback endpoint via `ctypes` |
 | `autostart.py` | functions | `winreg` HKCU Run key management |
+| `update_checker.py` | `UpdateCheckWorker`, `select_available_update` | Non-blocking GitHub Releases lookup; semantic version comparison; Windows ZIP asset selection |
+| `updater.py` | `UpdateDownloadWorker`, `launch_staged_update` | Downloads a confirmed release ZIP and launches a PowerShell helper that applies the update after the frozen app exits |
 | `logging_setup.py` | `configure_logging` | Rotating file handler + stderr handler |
 | `__main__.py` | `main` | Entry point: configure logging, create `App`, call `run()` |
 
@@ -128,6 +134,15 @@ History window delete
 History window copy
   → QApplication.clipboard().setText(entry.text)
   → copy_requested(text)                   # logging/telemetry hook in App
+
+Startup update check
+  → if AppConfig.check_updates_on_startup
+    → UpdateCheckWorker queries GitHub Releases on a QThread
+    → if newer eligible release with matching Windows ZIP exists
+      → App asks the user before download/apply
+      → UpdateDownloadWorker downloads the ZIP to %LOCALAPPDATA%/spkup/updates
+      → updater validates the archive and launches a helper PowerShell process
+      → App quits; helper extracts the new bundle and starts updated spkup.exe
 ```
 
 ---
@@ -140,6 +155,9 @@ History window copy
 | pynput listener thread | `HotkeyListener._on_press` / `_on_release` | `QMetaObject.invokeMethod` with `QueuedConnection` → main thread |
 | `_TranscriptionWorker` (QThread) | faster-whisper inference | `pyqtSignal` → main thread |
 | `_ModelDownloadWorker` (QThread) | HuggingFace model download | `pyqtSignal` → main thread |
+| `UpdateCheckWorker` (QThread) | GitHub Releases metadata request | `pyqtSignal` → main thread |
+| `UpdateDownloadWorker` (QThread) | Confirmed release ZIP download | `pyqtSignal` → main thread |
+| updater helper process | Wait for frozen app exit, extract release ZIP, start updated exe | Separate PowerShell process |
 
 **Rule:** No `QWidget` or `QApplication` method is ever called from a non-Qt thread.
 
@@ -158,6 +176,7 @@ History window copy
 | `overlay_position` | `"bottom-right"` | `"bottom-right"`, `"bottom-left"`, `"top-right"`, `"top-left"` |
 | `max_recording_seconds` | `120` | Safety cutoff for `AudioRecorder`; also drives the live recording countdown shown in the overlay |
 | `mute_playback_while_recording` | `False` | When enabled, snapshot the default playback mute state, mute during active capture, and restore on stop/error/quit |
+| `check_updates_on_startup` | `True` | When enabled, startup checks GitHub Releases for a newer Windows ZIP; the app asks before downloading or applying |
 
 ---
 
@@ -171,6 +190,7 @@ History window copy
 | 2026-04-01 | pynput over `keyboard` lib | Distinct press/release callbacks; no admin required |
 | 2026-04-01 | QThread for transcription | Never block the UI thread during inference |
 | 2026-04-01 | Atomic config write (temp file → rename) | Prevent corrupt config on crash during save |
+| 2026-05-20 | Confirm-before-apply startup updates | Use the existing GitHub Releases ZIP channel without silent downloads or silent installs |
 
 ---
 
@@ -197,6 +217,8 @@ e:\spkup\
     transcription_history.py
     transcription_history_window.py
     autostart.py
+    update_checker.py
+    updater.py
     logging_setup.py
     resources/
       tray.png

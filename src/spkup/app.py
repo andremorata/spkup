@@ -7,7 +7,7 @@ from typing import cast
 
 from PyQt6.QtCore import Qt, QRect, QRectF, QTimer, QObject, pyqtSignal
 from PyQt6.QtGui import QAction, QActionGroup, QBrush, QColor, QIcon, QPainter, QPen, QPixmap
-from PyQt6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
+from PyQt6.QtWidgets import QApplication, QMenu, QMessageBox, QSystemTrayIcon
 
 from spkup.audio_devices import describe as describe_device
 from spkup.audio_devices import list_input_devices, resolve_device, spec_from_device
@@ -23,6 +23,13 @@ from spkup.sound_cues import play_cue
 from spkup.transcription_history import TranscriptionHistory
 from spkup.transcription_history_window import TranscriptionHistoryWindow
 from spkup.transcriber import Transcriber
+from spkup.update_checker import UpdateCheckWorker, UpdateInfo
+from spkup.updater import (
+    UpdateApplyError,
+    UpdateDownloadWorker,
+    is_frozen_windows_build,
+    launch_staged_update,
+)
 
 _log = logging.getLogger(__name__)
 
@@ -133,6 +140,8 @@ class App(QObject):
         self._transcription_history_window.copy_requested.connect(
             self._on_transcription_history_copy_requested
         )
+        self._update_check_worker: UpdateCheckWorker | None = None
+        self._update_download_worker: UpdateDownloadWorker | None = None
 
         # Recorder → transcription pipeline
         # Duration capture runs first so _on_transcription_finished can judge
@@ -198,6 +207,8 @@ class App(QObject):
             self._listener.start()
             self._listener_active = True
             _log.info("Hotkey listener active: %s", self._config.hotkey)
+
+        QTimer.singleShot(1500, self._start_update_check_if_enabled)
 
     # ---------- Settings -----------------------------------------------------
 
@@ -302,6 +313,114 @@ class App(QObject):
                     QSystemTrayIcon.MessageIcon.Information,
                     4000,
                 )
+
+    # ---------- Updates ------------------------------------------------------
+
+    def _start_update_check_if_enabled(self) -> None:
+        if not self._config.check_updates_on_startup:
+            _log.info("Startup update check disabled in settings")
+            return
+
+        worker = self._update_check_worker
+        if worker is not None and worker.isRunning():
+            return
+
+        _log.info("Checking for application updates")
+        self._update_check_worker = UpdateCheckWorker()
+        self._update_check_worker.update_available.connect(self._on_update_available)
+        self._update_check_worker.no_update.connect(self._on_update_check_no_update)
+        self._update_check_worker.error.connect(self._on_update_check_error)
+        self._update_check_worker.finished.connect(self._on_update_check_finished)
+        self._update_check_worker.start()
+
+    def _on_update_check_finished(self) -> None:
+        self._update_check_worker = None
+
+    def _on_update_check_no_update(self) -> None:
+        _log.info("No application update available")
+
+    def _on_update_check_error(self, msg: str) -> None:
+        _log.warning("Update check unavailable: %s", msg)
+
+    def _on_update_available(self, update: UpdateInfo) -> None:
+        _log.info(
+            "Application update available: version=%s prerelease=%s",
+            update.version,
+            update.prerelease,
+        )
+
+        if not is_frozen_windows_build():
+            if QSystemTrayIcon.supportsMessages():
+                self._tray.showMessage(
+                    "spkup update available",
+                    (
+                        f"Version {update.version} is available. Automatic apply is "
+                        "available only in packaged Windows builds."
+                    ),
+                    QSystemTrayIcon.MessageIcon.Information,
+                    6000,
+                )
+            return
+
+        release_kind = "nightly pre-release" if update.prerelease else "release"
+        reply = QMessageBox.question(
+            None,
+            "spkup update available",
+            (
+                f"spkup {update.version} is available as a {release_kind}.\n\n"
+                "Download and apply it now? spkup will close and restart after "
+                "the update is staged."
+            ),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            _log.info("User declined update %s", update.version)
+            return
+
+        self._download_and_apply_update(update)
+
+    def _download_and_apply_update(self, update: UpdateInfo) -> None:
+        if self._update_download_worker is not None and self._update_download_worker.isRunning():
+            return
+
+        if QSystemTrayIcon.supportsMessages():
+            self._tray.showMessage(
+                "spkup update",
+                f"Downloading spkup {update.version}...",
+                QSystemTrayIcon.MessageIcon.Information,
+                4000,
+            )
+
+        self._update_download_worker = UpdateDownloadWorker(update)
+        self._update_download_worker.download_finished.connect(
+            self._on_update_download_finished
+        )
+        self._update_download_worker.error.connect(self._on_update_download_error)
+        self._update_download_worker.finished.connect(self._on_update_download_worker_done)
+        self._update_download_worker.start()
+
+    def _on_update_download_worker_done(self) -> None:
+        self._update_download_worker = None
+
+    def _on_update_download_error(self, msg: str) -> None:
+        _log.error("Update download failed: %s", msg)
+        QMessageBox.critical(None, "spkup update failed", msg)
+
+    def _on_update_download_finished(self, update: UpdateInfo, zip_path) -> None:
+        try:
+            launch_staged_update(update, zip_path)
+        except UpdateApplyError as exc:
+            _log.error("Update apply failed: %s", exc)
+            QMessageBox.critical(None, "spkup update failed", str(exc))
+            return
+
+        QMessageBox.information(
+            None,
+            "spkup update",
+            "The update is ready. spkup will close and restart automatically.",
+        )
+        QApplication.quit()
 
     # ---------- Microphone submenu -------------------------------------------
 

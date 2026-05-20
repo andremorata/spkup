@@ -1,6 +1,7 @@
 # spec: Nightly Release Automation
 
 > Maintenance work item — opened 2026-04-20.
+> Amended 2026-05-20 by `specs/spec-nightly-stable-releases.issue.md`: scheduled builds now publish normal GitHub Releases instead of pre-releases.
 > Do not extend the original MVP phase files (phase1–phase9) for this work.
 
 ---
@@ -14,7 +15,7 @@ used daily, useful improvements land frequently and often go unreleased for days
 
 The developer wants a zero-touch release cadence: every evening the CI should check
 whether new commits have landed since the last release and, if so, automatically build,
-package, and publish a new pre-release to GitHub — without the developer doing anything.
+package, and publish a new release to GitHub — without the developer doing anything.
 When nothing has changed, the check should cost nothing and produce zero noise.
 
 ---
@@ -32,8 +33,7 @@ A new scheduled GitHub Actions workflow (`nightly.yml`) runs at 8 PM UTC every d
 4. **Build and package** — runs PyInstaller and produces `spkup-X.Y.Z-windows-x64.zip`
    using the same steps as the existing `release.yml`.
 5. **Tag and publish** — creates a `vX.Y.Z` annotated tag and publishes a GitHub
-   pre-release with auto-generated release notes and the title
-   `spkup vX.Y.Z (nightly YYYY-MM-DD)`.
+   Release with auto-generated release notes and the title `spkup vX.Y.Z`.
 
 The existing `ci.yml` and `release.yml` workflows are not modified.
 
@@ -49,8 +49,8 @@ The existing `ci.yml` and `release.yml` workflows are not modified.
 6. As a developer, I want the `github-actions[bot]` identity to be used for version bump commits, so that bot-made commits are clearly distinguishable from developer commits in git history.
 7. As a developer, I want the nightly build to run the full test suite before publishing, so that a broken build is never distributed.
 8. As a developer, I want the workflow to abort and fail visibly if tests fail (without publishing anything), so I am notified when nightly quality gates break.
-9. As a developer, I want the nightly release to be published as a GitHub pre-release, so that users can distinguish nightly builds from hand-cut stable releases.
-10. As a developer, I want the GitHub release title to include the date (e.g., `spkup v0.1.3 (nightly 2026-04-21)`), so I can quickly identify which day a nightly was built.
+9. As a developer, I want the nightly release to be published as a normal GitHub Release, so the desktop app can consume frequent releases through startup auto-update without channel ambiguity.
+10. As a developer, I want the GitHub release title to match the normal release format (e.g., `spkup v0.1.3`), so scheduled and hand-cut releases share one release surface.
 11. As a developer, I want release notes to be auto-generated from commits since the previous release tag, so I can review what changed without writing notes manually.
 12. As a developer, I want the nightly artifact to follow the same naming convention as stable releases (`spkup-X.Y.Z-windows-x64.zip`), so that testing nightly builds follows the same process.
 13. As a developer, I want to continue cutting stable releases manually by pushing a `v*` tag, with `release.yml` working exactly as today, so I retain full control over stable releases.
@@ -103,9 +103,9 @@ The existing `ci.yml` and `release.yml` workflows are not modified.
 - Create an annotated tag on HEAD: `git tag -a vX.Y.Z -m "Release vX.Y.Z (nightly)"`.
 - Push the tag: `git push origin vX.Y.Z`.
 - Publish via `softprops/action-gh-release@v2` with:
-  - `prerelease: true`
+  - `prerelease: false`
   - `generate_release_notes: true`
-  - `name: spkup vX.Y.Z (nightly YYYY-MM-DD)`
+  - `name: spkup vX.Y.Z`
   - `tag_name: vX.Y.Z`
   - `files: dist/spkup-X.Y.Z-windows-x64.zip`
 
@@ -129,7 +129,7 @@ The existing `ci.yml` and `release.yml` workflows are not modified.
 2. Confirm early-exit case: ensure the latest tag points to HEAD → trigger manually →
    verify workflow completes successfully with no release published.
 3. Confirm trigger case: push a commit past the latest tag → trigger manually → verify
-   version bump commit appears on main with `[skip ci]`, a new `vX.Y.Z` pre-release
+   version bump commit appears on main with `[skip ci]`, a new `vX.Y.Z` release
    appears on GitHub Releases, and the ZIP artifact is attached.
 4. Confirm recovery case: simulate an orphaned bump (manually bump `__init__.py` and
    push without tagging) → trigger manually → verify no double-bump, correct tag, and
@@ -150,7 +150,7 @@ The existing `ci.yml` and `release.yml` workflows are not modified.
 - [ ] The version bump commit message matches `chore: bump version to X.Y.Z [skip ci]` and is authored by `github-actions[bot]`.
 - [ ] Tests run before any artifact is built or tag is created.
 - [ ] If tests fail, no version tag is created and no release is published (version bump commit may remain on main).
-- [ ] A GitHub pre-release titled `spkup vX.Y.Z (nightly YYYY-MM-DD)` is published with `prerelease: true`.
+- [ ] A GitHub Release titled `spkup vX.Y.Z` is published with `prerelease: false`.
 - [ ] The release includes the ZIP artifact `spkup-X.Y.Z-windows-x64.zip`.
 - [ ] Release notes are auto-generated from commits since the previous tag.
 - [ ] If `__version__` in `__init__.py` does not yet have a corresponding git tag, no additional patch bump is applied (orphaned-bump recovery).

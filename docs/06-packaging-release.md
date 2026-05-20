@@ -53,7 +53,6 @@ This baseline does not yet promise:
 
 - Code signing
 - Installer UX
-- Auto-update support
 - Cross-platform artifacts
 
 ---
@@ -126,3 +125,25 @@ Later Phase 9 implementation work should preserve this contract rather than repl
 - GitHub Release names and uploaded artifacts should use the same `X.Y.Z`
 
 If a future workflow needs additional metadata, add it around this contract instead of introducing a second version source.
+
+---
+
+## 6. Runtime Auto-Update Contract
+
+Packaged Windows builds check GitHub Releases on startup by default. The runtime updater uses the same release contract defined above:
+
+- Eligible release tags are semantic `vX.Y.Z` tags.
+- Draft releases are ignored.
+- Scheduled nightly builds publish normal GitHub Releases, so the updater primarily tracks normal releases.
+- Older pre-releases may still exist in release history, but future scheduled artifacts should not carry the pre-release badge.
+- The app only considers a release installable when it includes `spkup-X.Y.Z-windows-x64.zip`.
+- The user is prompted before any download or apply step.
+- Source/development runs can detect that an update exists, but automatic apply is only supported in frozen Windows builds.
+
+The apply flow is staged because Windows cannot safely overwrite the running executable. After the user confirms, Spkup downloads the ZIP under `%LOCALAPPDATA%/spkup/updates`, validates that it contains the expected `spkup.exe`, launches a helper PowerShell process, exits, and lets the helper extract and start the new bundle.
+
+Current limitations:
+
+- Release ZIPs are not code-signed.
+- No separate checksum or signature artifact is verified.
+- There is no channel selector yet; scheduled releases are treated as the active release stream by design.
