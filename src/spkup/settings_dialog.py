@@ -385,6 +385,18 @@ class SettingsDialog(QDialog):
         )
         gen_layout.addWidget(self._mute_playback_checkbox)
 
+        # ── Updates ───────────────────────────────────────────────────────────
+        self._updates_checkbox = QCheckBox("Check for updates on startup")
+        self._updates_checkbox.setChecked(config.check_updates_on_startup)
+        self._updates_checkbox.setToolTip(
+            "Look for newer GitHub Releases when spkup starts. "
+            "You will be asked before any update is downloaded or applied."
+        )
+        self._updates_checkbox.toggled.connect(
+            lambda checked: setattr(self._config, "check_updates_on_startup", checked)
+        )
+        gen_layout.addWidget(self._updates_checkbox)
+
         # ── Model idle unload ─────────────────────────────────────────────────
         gen_layout.addWidget(QLabel("Unload model after inactivity"))
         self._idle_unload_spin = QSpinBox()

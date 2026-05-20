@@ -123,7 +123,9 @@ Hotkey tapped again → recording_stopped → Recorder.stop()
 - [x] Maintenance mode decision documented
 - [x] Post-MVP spec / requirement workflow defined
 - [x] Nightly release automation maintenance item opened in `specs/`
+- [x] Nightly automation now publishes normal GitHub Releases for frequent app updates
 - [x] Manual cancellation of in-progress transcription maintenance item opened in `specs/`
 - [x] Recording-limit visibility maintenance item opened in `specs/`
 - [x] Recording overlay shows remaining capture time before the existing safety cutoff
-- [ ] Manual cancellation of in-progress transcription delivered as a hotkey-first slice with a shared app-level cancel entry point ready for a future overlay button
+- [x] Manual cancellation of in-progress transcription delivered as a hotkey-first slice with a shared app-level cancel entry point ready for a future overlay button
+- [x] Startup auto-update maintenance item opened in `specs/`

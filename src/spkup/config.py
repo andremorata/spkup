@@ -21,6 +21,7 @@ class AppConfig:
     done_animation: str = "checkmark_draw"
     error_animation: str = "shake"
     input_device: dict | None = None
+    check_updates_on_startup: bool = True
 
 
 CONFIG_DIR = Path(os.environ["APPDATA"]) / "spkup"
