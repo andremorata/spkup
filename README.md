@@ -6,7 +6,7 @@ Push-to-talk speech-to-text for Windows. Hold a hotkey or single-click the tray 
 - Single left-click tray icon toggle for record / stop
 - Local Whisper inference via [faster-whisper](https://github.com/SYSTRAN/faster-whisper) — no cloud, no API key
 - Mixed Portuguese + English support (auto-detect)
-- Always-on-top overlay with RECORDING / TRANSCRIBING / DONE states
+- Always-on-top overlay with live remaining-time feedback during capture plus RECORDING / TRANSCRIBING / DONE states
 - Lives in the system tray; zero friction
 
 **Target machine:** Windows 11, Python 3.12, RTX 4070 (8 GB VRAM)
@@ -29,6 +29,10 @@ python -m spkup
 # or
 run.bat
 ```
+
+From the repository root, `python -m spkup` now resolves the current checkout's
+`src\spkup` code even if you also have an editable install from another clone or
+worktree.
 
 ---
 

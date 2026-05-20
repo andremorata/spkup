@@ -48,6 +48,8 @@ pytest
 | `app.py` (playback-mute lifecycle) | `tests/test_app_playback_mute.py` | Begin-recording mute path, delayed-start no-op path, stop/error/cleanup restore behavior with mocked Qt-heavy dependencies |
 | `app.py` (tray toggle + trigger guards) | `tests/test_app_trigger_guards.py` | Tray activation reasons, shared start/stop request gating, redundant trigger suppression after cancel/error/finalize, legitimate stop while active |
 | `app.py` (manual transcription cancel) | `tests/test_app_transcription_cancel.py` | Hotkey/tray start triggers during the transcribing state route through the single `_cancel_active_transcription` entry point; canceled jobs skip clipboard/history, hide the overlay, disable retry, and arm the suppression window; `_transcribing_active` stays consistent across finished/error/timeout/auto-retry/manual-retry paths |
+| `app.py` (recording countdown) | `tests/test_app_recording_countdown.py` | Countdown start/refresh/clear lifecycle, handoff into transcribing, and recording-error cleanup |
+| `overlay.py` | `tests/test_overlay.py` | Countdown visual formatting, low-time urgency flag, progress clamping, and countdown cleanup on hide |
 | `transcription_history.py` | `tests/test_transcription_history.py` | Add/list ordering, keep only last 5 entries, delete behavior, Unicode text, duplicate entries remain distinct |
 
 These are the checks that are suitable for repeatable automated execution. They are run locally with `pytest`, and the same class of checks should remain compatible with CI.
@@ -74,7 +76,7 @@ These modules involve Qt widget painting, hardware I/O, or CUDA inference — no
 
 | Module | Manual check |
 | --- | --- |
-| `overlay.py` | Visual inspection: three states show correct colours and labels; auto-hides after DONE |
+| `overlay.py` | Visual inspection: recording overlay shows a live remaining-time countdown, low-time state is clearly visible, other states still show correct colours/labels, and DONE still auto-hides |
 | `app.py` (tray) | Tray icon appears; single left-click toggles recording; right-click shows menu; **Recent transcriptions** opens the history window; Quit exits |
 | `hotkey.py` (listener) | Hold hotkey emits started once; release emits stopped; no flooding |
 | `recorder.py` (stream) | Hold hotkey, speak, release → non-empty array shape printed to stdout |

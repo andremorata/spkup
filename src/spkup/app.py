@@ -30,6 +30,7 @@ _log = logging.getLogger(__name__)
 # treated as a likely mic problem and surfaced to the user. Shorter empties
 # are silently ignored so accidental hotkey taps do not spam warnings.
 EMPTY_WARNING_THRESHOLD_S = 5.0
+RECORDING_COUNTDOWN_INTERVAL_MS = 100
 TRIGGER_SUPPRESSION_WINDOW_S = 1.0
 
 
@@ -98,6 +99,7 @@ class App(QObject):
         self._recording_active = False
         self._transcribing_active = False
         self._start_trigger_suppression_until = 0.0
+        self._recording_deadline_monotonic: float | None = None
 
         # Core components
         self._recorder = AudioRecorder(
@@ -115,6 +117,10 @@ class App(QObject):
         )
         self._playback_mute = PlaybackMuteController()
         self._session_ready.connect(self._begin_recording_session)
+        self._recording_countdown_timer = QTimer()
+        self._recording_countdown_timer.timeout.connect(
+            self._refresh_recording_countdown
+        )
         self._transcription_watchdog = QTimer()
         self._transcription_watchdog.setSingleShot(True)
         self._transcription_watchdog.timeout.connect(self._on_transcription_timeout)
@@ -261,6 +267,9 @@ class App(QObject):
                 "Input device changed via settings: %s",
                 describe_device(new_config.input_device),
             )
+
+        if old.max_recording_seconds != new_config.max_recording_seconds:
+            self._recorder.set_max_seconds(new_config.max_recording_seconds)
 
         # Reposition overlay if corner changed
         if old.overlay_position != new_config.overlay_position:
@@ -430,6 +439,38 @@ class App(QObject):
 
         self._on_recording_stopped()
 
+    def _start_recording_countdown(self) -> None:
+        max_seconds = max(1, int(self._config.max_recording_seconds))
+        self._recording_deadline_monotonic = time.monotonic() + max_seconds
+        timer = getattr(self, "_recording_countdown_timer", None)
+        if timer is not None:
+            timer.start(RECORDING_COUNTDOWN_INTERVAL_MS)
+        self._refresh_recording_countdown()
+
+    def _refresh_recording_countdown(self) -> None:
+        deadline = self._recording_deadline_monotonic
+        if deadline is None:
+            return
+
+        remaining = max(0.0, deadline - time.monotonic())
+        overlay = getattr(self, "_overlay", None)
+        if overlay is not None:
+            overlay.set_recording_countdown(
+                remaining,
+                self._config.max_recording_seconds,
+            )
+
+    def _stop_recording_countdown(self) -> None:
+        self._recording_deadline_monotonic = None
+
+        timer = getattr(self, "_recording_countdown_timer", None)
+        if timer is not None:
+            timer.stop()
+
+        overlay = getattr(self, "_overlay", None)
+        if overlay is not None:
+            overlay.clear_recording_countdown()
+
     def _on_hotkey_recording_started(self) -> None:
         self._request_recording_start("hotkey")
 
@@ -462,8 +503,12 @@ class App(QObject):
         if self._config.mute_playback_while_recording:
             self._playback_mute.mute_for_recording()
 
-        self._overlay.show_state(OverlayState.RECORDING)
         self._recorder.start()
+        if not self._recording_active:
+            return
+
+        self._overlay.show_state(OverlayState.RECORDING)
+        self._start_recording_countdown()
 
     def _restore_playback_mute(self) -> None:
         if self._playback_mute.restore_pending:
@@ -500,7 +545,11 @@ class App(QObject):
         self._recording_active = True
         play_cue("start")
         self._recorder.start()
+        if not self._recording_active:
+            return
+
         self._overlay.show_state(OverlayState.RECORDING)
+        self._start_recording_countdown()
 
     def _play_start_cue_then_begin(self) -> None:
         play_cue("start", blocking=True)
@@ -510,6 +559,7 @@ class App(QObject):
     def _on_recording_stopped(self) -> None:
         _log.debug("Recording stopped; transcribing")
         self._tray.setIcon(_make_tray_icon(color="#ffffff"))
+        self._stop_recording_countdown()
 
         if self._recording_start_pending:
             self._recording_start_pending = False
@@ -536,6 +586,7 @@ class App(QObject):
         _log.error("Recording error: %s", msg)
         self._recording_start_pending = False
         self._recording_active = False
+        self._stop_recording_countdown()
         self._arm_start_trigger_suppression()
         self._restore_playback_mute()
         self._tray.setIcon(_make_tray_icon(color="#ffffff"))
@@ -689,6 +740,7 @@ class App(QObject):
         watchdog = getattr(self, "_transcription_watchdog", None)
         self._recording_active = False
         self._transcribing_active = False
+        self._stop_recording_countdown()
         self._recorder.stop()
         transcriber = getattr(self, "_transcriber", None)
         if transcriber is not None:

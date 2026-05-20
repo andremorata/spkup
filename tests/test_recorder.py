@@ -94,3 +94,14 @@ def test_set_device_none_restores_default():
         recorder.stop()
 
     assert mk.call_args.kwargs["device"] is None
+
+
+def test_set_max_seconds_updates_next_safety_timeout():
+    recorder = AudioRecorder(max_seconds=120)
+    recorder.set_max_seconds(45)
+
+    fake_stream = MagicMock()
+    with patch("spkup.recorder.sounddevice.InputStream", return_value=fake_stream):
+        recorder.start()
+
+    assert recorder._timer.interval() == 45000
