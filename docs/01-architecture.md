@@ -56,7 +56,7 @@ flowchart TD
 | `transcriber.py` | `Transcriber` | Facade; owns `_TranscriptionWorker` lifecycle; busy guard; emits `transcription_finished(str)` |
 | `transcriber.py` | `_TranscriptionWorker` | QThread worker; lazy model load; faster-whisper inference; emits result or error |
 | `model_manager.py` | `ModelManager` | Cache dir management; `is_downloaded`; `_ModelDownloadWorker` for HuggingFace downloads |
-| `overlay.py` | `OverlayWidget` | Frameless always-on-top click-through widget; RECORDING / TRANSCRIBING / DONE states |
+| `overlay.py` | `OverlayWidget` | Frameless always-on-top click-through widget; RECORDING / TRANSCRIBING / DONE states plus remaining-time feedback during active capture |
 | `clipboard.py` | `copy_to_clipboard` | `QApplication.clipboard().setText()` — Unicode-safe |
 | `app.py` | `App` | `QApplication` + `QSystemTrayIcon`; instantiates all components; wires all signals; owns tray click recording toggle, trigger suppression, and the single `_cancel_active_transcription` entry point that discards an in-progress transcription (used today by the hotkey/tray start-trigger routing during the transcribing state, and reserved for a future overlay cancel button) |
 | `settings_dialog.py` | `SettingsDialog` | Hotkey capture, model picker, device selector, overlay position, playback-mute toggle; reinitializes components on save |
@@ -80,6 +80,7 @@ Hotkey held
     → if AppConfig.mute_playback_while_recording: play start cue, then PlaybackMuteController.mute_for_recording()
     → AudioRecorder.start()
     → OverlayWidget.show_state(RECORDING)
+    → App updates OverlayWidget with the remaining recording time until the safety cutoff
 
 Hotkey released
   → HotkeyListener.recording_stopped
@@ -155,7 +156,7 @@ History window copy
 | `device` | `"cuda"` | `"cuda"` or `"cpu"` |
 | `compute_type` | `"float16"` | `"float16"`, `"int8"`, or `"float32"` |
 | `overlay_position` | `"bottom-right"` | `"bottom-right"`, `"bottom-left"`, `"top-right"`, `"top-left"` |
-| `max_recording_seconds` | `120` | Safety cutoff for `AudioRecorder` |
+| `max_recording_seconds` | `120` | Safety cutoff for `AudioRecorder`; also drives the live recording countdown shown in the overlay |
 | `mute_playback_while_recording` | `False` | When enabled, snapshot the default playback mute state, mute during active capture, and restore on stop/error/quit |
 
 ---

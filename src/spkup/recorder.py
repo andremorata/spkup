@@ -32,6 +32,10 @@ class AudioRecorder(QObject):
         """
         self._device = device
 
+    def set_max_seconds(self, max_seconds: int) -> None:
+        """Update the safety cutoff used for the next recording session."""
+        self._max_seconds = max(1, int(max_seconds))
+
     def start(self):
         if self._stream is not None:
             return

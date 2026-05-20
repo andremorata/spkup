@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any, cast
 
@@ -9,9 +11,10 @@ from PyQt6.QtGui import QColor, QFont, QPaintEvent, QPainter
 from PyQt6.QtWidgets import QApplication, QWidget
 
 _MARGIN = 16
-_PILL_W, _PILL_H = 160, 44
+_PILL_W, _PILL_H = 220, 44
 _CORNER_RADIUS = 6
-_ICON_ZONE = 36  # px reserved for icon-mode animations
+_ICON_ZONE = 40  # px reserved for icon-mode animations
+_COUNTDOWN_URGENT_THRESHOLD_S = 10.0
 _pyqt_property = cast(Any, getattr(QtCore, "pyqtProperty"))
 
 
@@ -38,6 +41,31 @@ _STATE_LABELS: dict[OverlayState, str] = {
 }
 
 
+@dataclass(frozen=True)
+class RecordingCountdownVisual:
+    text: str
+    caption: str
+    progress: float
+    urgent: bool
+
+
+def build_recording_countdown_visual(
+    seconds_remaining: float, max_seconds: float
+) -> RecordingCountdownVisual:
+    bounded_total = max(1.0, float(max_seconds))
+    bounded_remaining = min(max(float(seconds_remaining), 0.0), bounded_total)
+    display_seconds = int(math.ceil(bounded_remaining))
+    minutes, seconds = divmod(display_seconds, 60)
+    progress = bounded_remaining / bounded_total
+    urgent = bounded_remaining <= _COUNTDOWN_URGENT_THRESHOLD_S
+    return RecordingCountdownVisual(
+        text=f"{minutes:02d}:{seconds:02d}",
+        caption="Stopping soon" if urgent else "Time left",
+        progress=progress,
+        urgent=urgent,
+    )
+
+
 class OverlayWidget(QWidget):
     """Frameless, always-on-top, click-through status pill.
 
@@ -60,6 +88,7 @@ class OverlayWidget(QWidget):
         self._state = OverlayState.HIDDEN
         self._pill_opacity_val: float = 1.0
         self._overlay_position = overlay_position
+        self._recording_countdown_visual: RecordingCountdownVisual | None = None
 
         # Animation key settings
         self._animation_keys: dict[OverlayState, str] = {
@@ -98,6 +127,20 @@ class OverlayWidget(QWidget):
         """Update the animation key for *state*."""
         self._animation_keys[state] = key
 
+    def set_recording_countdown(
+        self, seconds_remaining: float, max_seconds: float
+    ) -> None:
+        self._recording_countdown_visual = build_recording_countdown_visual(
+            seconds_remaining, max_seconds
+        )
+        if self._state == OverlayState.RECORDING:
+            self.update()
+
+    def clear_recording_countdown(self) -> None:
+        self._recording_countdown_visual = None
+        if self._state == OverlayState.RECORDING:
+            self.update()
+
     def show_state(self, state: OverlayState) -> None:
         """Transition to *state*, managing animation and auto-hide."""
         self._hide_timer.stop()
@@ -110,9 +153,13 @@ class OverlayWidget(QWidget):
         self._state = state
 
         if state == OverlayState.HIDDEN:
+            self._recording_countdown_visual = None
             self._pill_opacity_val = 1.0
             self.hide()
             return
+
+        if state != OverlayState.RECORDING:
+            self._recording_countdown_visual = None
 
         # Instantiate and start the new animation
         key = self._animation_keys.get(state, "classic")
@@ -166,9 +213,23 @@ class OverlayWidget(QWidget):
         p.setPen(Qt.PenStyle.NoPen)
         p.drawRoundedRect(self.rect(), _CORNER_RADIUS, _CORNER_RADIUS)
 
-        # Layout mode determines text placement and animation zone
+        countdown_visual = (
+            self._recording_countdown_visual
+            if self._state == OverlayState.RECORDING
+            else None
+        )
         layout = getattr(anim, "layout_mode", "full") if anim else "full"
-        if layout == "icon" and anim is not None:
+        if countdown_visual is not None:
+            icon_rect = QRect(8, 6, _ICON_ZONE, _PILL_H - 14)
+            if anim is not None:
+                anim.paint(p, icon_rect)
+            text_rect = QRect(
+                icon_rect.right() + 8,
+                0,
+                self.width() - icon_rect.right() - 18,
+                self.height() - 6,
+            )
+        elif layout == "icon" and anim is not None:
             icon_rect = QRect(4, 4, _ICON_ZONE, _PILL_H - 8)
             anim.paint(p, icon_rect)
             text_rect = QRect(
@@ -179,11 +240,58 @@ class OverlayWidget(QWidget):
             if anim is not None:
                 anim.paint(p, self.rect())
 
-        # Draw label
+        if countdown_visual is None:
+            p.setPen(QColor("#ffffff"))
+            font = QFont("Segoe UI", 10, QFont.Weight.Bold)
+            p.setFont(font)
+            p.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, label)
+            p.end()
+            return
+
+        status_rect = QRect(
+            text_rect.left(),
+            text_rect.top(),
+            max(1, text_rect.width() // 2),
+            text_rect.height(),
+        )
+        countdown_rect = QRect(
+            status_rect.right(),
+            text_rect.top(),
+            max(1, text_rect.right() - status_rect.right()),
+            text_rect.height(),
+        )
+        track_rect = QRect(10, self.height() - 6, self.width() - 20, 3)
+
         p.setPen(QColor("#ffffff"))
-        font = QFont("Segoe UI", 10, QFont.Weight.Bold)
-        p.setFont(font)
-        p.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, label)
+        status_font = QFont("Segoe UI", 10, QFont.Weight.Bold)
+        p.setFont(status_font)
+        p.drawText(
+            status_rect,
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+            label,
+        )
+
+        countdown_color = QColor("#FFF59D" if countdown_visual.urgent else "#FFFFFF")
+        p.setPen(countdown_color)
+        countdown_font = QFont("Segoe UI", 13, QFont.Weight.Bold)
+        p.setFont(countdown_font)
+        p.drawText(
+            countdown_rect,
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+            countdown_visual.text,
+        )
+
+        track_color = QColor(255, 255, 255, 72)
+        p.setBrush(track_color)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.drawRoundedRect(track_rect, 1.5, 1.5)
+
+        fill_width = max(0, int(round(track_rect.width() * countdown_visual.progress)))
+        if fill_width > 0:
+            fill_rect = QRect(track_rect.left(), track_rect.top(), fill_width, track_rect.height())
+            fill_color = QColor("#FFF59D" if countdown_visual.urgent else "#FFFFFF")
+            p.setBrush(fill_color)
+            p.drawRoundedRect(fill_rect, 1.5, 1.5)
         p.end()
 
     def _reposition(self) -> None:
