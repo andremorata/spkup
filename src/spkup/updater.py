@@ -6,7 +6,7 @@ import shutil
 import subprocess
 import sys
 import zipfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from textwrap import dedent
 import urllib.error
 import urllib.request
@@ -61,7 +61,24 @@ def validate_update_archive(zip_path: Path, version: str) -> str:
 
     try:
         with zipfile.ZipFile(zip_path) as archive:
-            names = {name.replace("\\", "/").rstrip("/") for name in archive.namelist()}
+            names = set()
+            for raw_name in archive.namelist():
+                name = raw_name.replace("\\", "/").rstrip("/")
+                if not name:
+                    continue
+                path = PurePosixPath(name)
+                parts = path.parts
+                if name.startswith("/") or (parts and parts[0].endswith(":")):
+                    raise UpdateApplyError(f"Archive contains unsafe absolute path: {raw_name}")
+                if "." in parts or ".." in parts:
+                    raise UpdateApplyError(
+                        f"Archive contains unsafe directory traversal path: {raw_name}"
+                    )
+                if parts and parts[0] != expected_root:
+                    raise UpdateApplyError(
+                        f"Archive contains unexpected top-level entry outside {expected_root}: {raw_name}"
+                    )
+                names.add(name)
     except (OSError, zipfile.BadZipFile) as exc:
         raise UpdateApplyError(f"Downloaded update is not a valid ZIP archive: {exc}") from exc
 
@@ -153,17 +170,20 @@ def launch_staged_update(
     )
 
     _log.info("Launching staged updater script: %s", script)
-    subprocess.Popen(
-        [
-            "powershell",
-            "-NoProfile",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-File",
-            str(script),
-        ],
-        close_fds=True,
-    )
+    try:
+        subprocess.Popen(
+            [
+                "powershell",
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                str(script),
+            ],
+            close_fds=True,
+        )
+    except OSError as exc:
+        raise UpdateApplyError(f"Could not launch staged updater: {exc}") from exc
     return script
 
 

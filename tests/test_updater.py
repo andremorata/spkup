@@ -47,7 +47,27 @@ def test_validate_update_archive_rejects_wrong_shape(tmp_path) -> None:
     with zipfile.ZipFile(archive, "w") as zip_file:
         zip_file.writestr("spkup.exe", "")
 
-    with pytest.raises(UpdateApplyError, match="expected executable"):
+    with pytest.raises(UpdateApplyError, match="unexpected top-level entry"):
+        validate_update_archive(archive, "1.2.3")
+
+
+def test_validate_update_archive_rejects_directory_traversal(tmp_path) -> None:
+    archive = tmp_path / "bad-traversal.zip"
+    with zipfile.ZipFile(archive, "w") as zip_file:
+        zip_file.writestr("spkup-1.2.3-windows-x64/spkup.exe", "")
+        zip_file.writestr("spkup-1.2.3-windows-x64/../evil.dll", "")
+
+    with pytest.raises(UpdateApplyError, match="directory traversal"):
+        validate_update_archive(archive, "1.2.3")
+
+
+def test_validate_update_archive_rejects_entries_outside_bundle_root(tmp_path) -> None:
+    archive = tmp_path / "bad-root.zip"
+    with zipfile.ZipFile(archive, "w") as zip_file:
+        zip_file.writestr("spkup-1.2.3-windows-x64/spkup.exe", "")
+        zip_file.writestr("other-bundle/readme.txt", "")
+
+    with pytest.raises(UpdateApplyError, match="unexpected top-level entry"):
         validate_update_archive(archive, "1.2.3")
 
 
@@ -78,3 +98,15 @@ def test_launch_staged_update_rejects_source_runs(monkeypatch, tmp_path) -> None
 
     with pytest.raises(UpdateApplyError, match="packaged Windows builds"):
         launch_staged_update(_update(), archive)
+
+
+def test_launch_staged_update_wraps_popen_oserror(monkeypatch, tmp_path) -> None:
+    archive = _write_update_zip(tmp_path / "update.zip")
+    executable = tmp_path / "spkup-1.2.2-windows-x64" / "spkup.exe"
+    executable.parent.mkdir()
+    executable.write_text("", encoding="utf-8")
+    monkeypatch.setattr("spkup.updater.is_frozen_windows_build", lambda: True)
+    monkeypatch.setattr("spkup.updater.subprocess.Popen", lambda *args, **kwargs: (_ for _ in ()).throw(OSError("boom")))
+
+    with pytest.raises(UpdateApplyError, match="Could not launch staged updater: boom"):
+        launch_staged_update(_update(), archive, current_executable=executable)
