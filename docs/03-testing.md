@@ -63,6 +63,7 @@ CI covers the automated checks above:
 - Pure Python unit tests under `tests/`
 - Mocked behavior for config, hotkey parsing, recorder lifecycle, model path management, clipboard integration, Windows autostart registry calls, playback-mute controller and app lifecycle rules, and transcription history rules
 - Regression tests for defects that can be reproduced without a live Qt desktop session, real audio devices, or GPU execution
+- Frozen-bundle packaging validation for critical CUDA/cuDNN DLLs via `python -m spkup.packaging_validation dist\spkup`
 
 For release preparation, these same tests remain the required automated baseline before cutting a version. A release candidate is not ready if `pytest` is failing locally, even if CI is green.
 
@@ -119,5 +120,6 @@ Each active spec issue lists specific acceptance criteria. In historical MVP rec
 For release-related work specifically, the minimum local release-validation baseline is:
 
 - `pytest`
+- `python -m spkup.packaging_validation dist\spkup` after building a frozen bundle
 - Manual Windows smoke check of the runnable app build under the current source version
 - Verification that the source version in `src/spkup/__init__.py` matches the intended Git tag `vX.Y.Z`

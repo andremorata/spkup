@@ -11,6 +11,7 @@ spkup is a single-process Windows desktop application. There is no server, no da
 - **Runtime:** Python 3.12, single process
 - **GUI framework:** PyQt6 — tray icon, overlay widget, settings dialog, clipboard
 - **Inference:** faster-whisper (CTranslate2, CUDA) — runs on a QThread worker
+- **GPU runtime packaging:** release bundles include NVIDIA CUDA/cuDNN wheel DLLs and fail packaging validation if critical DLLs are missing
 - **Audio:** sounddevice (PortAudio) — 16 kHz mono float32, stays in memory as numpy arrays
 - **Hotkey:** pynput — background thread, marshalled to Qt main thread via QMetaObject
 - **Persistence:** JSON config file at `%APPDATA%/spkup/config.json`; model cache at `%LOCALAPPDATA%/spkup/models`; update staging at `%LOCALAPPDATA%/spkup/updates`
@@ -73,7 +74,8 @@ flowchart TD
 | `update_checker.py` | `UpdateCheckWorker`, `select_available_update` | Non-blocking GitHub Releases lookup; semantic version comparison; Windows ZIP asset selection |
 | `updater.py` | `UpdateDownloadWorker`, `launch_staged_update` | Downloads a confirmed release ZIP and launches a PowerShell helper that applies the update after the frozen app exits |
 | `logging_setup.py` | `configure_logging` | Rotating file handler + stderr handler |
-| `__main__.py` | `main` | Entry point: configure logging, create `App`, call `run()` |
+| `packaging_validation.py` | functions / CLI | Validates frozen PyInstaller bundles contain the CUDA/cuDNN DLLs required for GPU transcription before release upload |
+| `__main__.py` | `main` | Entry point: repair missing standard streams in windowed builds, add bundled NVIDIA DLL directories to the Windows loader path, configure logging, create `App`, call `run()` |
 
 ---
 

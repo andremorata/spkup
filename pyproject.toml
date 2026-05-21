@@ -17,6 +17,9 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest"]
 build = ["PyInstaller>=6.14"]
+gpu = [
+    "nvidia-cudnn-cu12>=9,<10; platform_system == 'Windows'",
+]
 
 [tool.hatch.version]
 path = "src/spkup/__init__.py"

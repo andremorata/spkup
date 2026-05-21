@@ -97,7 +97,7 @@ jobs:
         shell: pwsh
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[dev,build]"
+          python -m pip install -e ".[dev,build,gpu]"
           python -m pytest tests/ -v
 
       - name: Capture release date
@@ -118,6 +118,11 @@ jobs:
             }
           }
           python -m PyInstaller --clean spkup.spec
+
+      - name: Validate CUDA runtime DLLs in frozen bundle
+        if: steps.changes.outputs.has_changes == 'true'
+        shell: pwsh
+        run: python -m spkup.packaging_validation dist\spkup
 
       - name: Package release archive
         id: package

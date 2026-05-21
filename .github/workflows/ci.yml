@@ -35,7 +35,7 @@ jobs:
       - name: Install project and build dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[dev,build]"
+          python -m pip install -e ".[dev,build,gpu]"
 
       - name: Run test suite
         run: python -m pytest tests/ -v
@@ -51,6 +51,9 @@ jobs:
 
       - name: Build Windows frozen bundle
         run: pyinstaller --clean spkup.spec
+
+      - name: Validate CUDA runtime DLLs in frozen bundle
+        run: python -m spkup.packaging_validation dist\spkup
 
       - name: Create versioned ZIP artifact
         shell: pwsh

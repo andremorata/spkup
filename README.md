@@ -23,6 +23,9 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
+On Windows, `requirements.txt` includes NVIDIA CUDA/cuDNN runtime wheels so
+local PyInstaller bundles match GPU-capable GitHub release artifacts.
+
 Run:
 
 ```bash

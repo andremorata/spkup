@@ -47,6 +47,7 @@ Baseline expectations for the first packaged release:
 
 - The artifact is built from a tagged commit
 - The artifact launches on a clean Windows machine with the expected runtime files bundled
+- The artifact includes the NVIDIA CUDA/cuDNN runtime DLLs required for GPU transcription on the target Windows RTX machine
 - The artifact supports the core user flow: tray startup, hotkey capture, recording, transcription, overlay feedback, and clipboard output
 
 This baseline does not yet promise:
@@ -71,7 +72,14 @@ cd e:\spkup
 pytest
 ```
 
-4. Run the local manual smoke checks required for the current release candidate on Windows:
+4. If validating a frozen release candidate, confirm the CUDA runtime DLL
+   contract before packaging or upload:
+
+```bash
+python -m spkup.packaging_validation dist\spkup
+```
+
+5. Run the local manual smoke checks required for the current release candidate on Windows:
 
 - App starts successfully
 - Tray icon appears and quit still works
@@ -80,7 +88,7 @@ pytest
 - Overlay state changes remain correct
 - Clipboard receives the transcription result
 
-5. Verify the release version contract is still aligned:
+6. Verify the release version contract is still aligned:
 
 - `src/spkup/__init__.py` contains `X.Y.Z`
 - Intended Git tag is `vX.Y.Z`
@@ -125,6 +133,13 @@ Later Phase 9 implementation work should preserve this contract rather than repl
 - GitHub Release names and uploaded artifacts should use the same `X.Y.Z`
 
 If a future workflow needs additional metadata, add it around this contract instead of introducing a second version source.
+
+Release and nightly packaging jobs install the `gpu` optional dependency group
+before PyInstaller runs. This makes NVIDIA runtime wheels available for
+`spkup.spec`, which collects their DLLs into the frozen bundle. The workflows
+then run `python -m spkup.packaging_validation dist\spkup` before ZIP
+publication; missing critical CUDA/cuDNN DLLs fail the build instead of
+publishing a CPU-fallback artifact.
 
 ---
 
