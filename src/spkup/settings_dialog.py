@@ -240,7 +240,8 @@ class SettingsDialog(QDialog):
 
     def __init__(self, config: AppConfig, first_run: bool = False, parent=None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("spkup — Settings")
+        from spkup import __version__
+        self.setWindowTitle(f"spkup — Settings (v{__version__})")
         self.setModal(True)
         self.setMinimumWidth(440)
 
