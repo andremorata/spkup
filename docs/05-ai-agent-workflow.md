@@ -48,6 +48,7 @@ Ask before:
 - Changing the config schema (`AppConfig` fields or defaults)
 - Modifying threading boundaries or signal connections in `app.py`
 - Touching the Windows registry or filesystem outside the documented paths
+- Expanding the supported platform matrix beyond Windows x64 and macOS ARM64
 
 ---
 
@@ -66,6 +67,7 @@ Ask before:
 | --- | --- |
 | Config schema | `docs/01-architecture.md` §6, `specs/project.plan.md` Working Assumptions |
 | New module added | `docs/01-architecture.md` Module Responsibilities table + Repository Layout |
+| Platform path, artifact, or capability behavior | `docs/01-architecture.md`, `docs/03-testing.md`, `docs/06-packaging-release.md`, active spec |
 | Threading boundary changed | `docs/01-architecture.md` §5 Threading Model |
 | New architectural decision | `docs/01-architecture.md` §7 Architectural Decisions |
 | Maintenance item completed | `specs/progress.status.md` |

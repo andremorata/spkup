@@ -21,6 +21,14 @@ from spkup.model_manager import (
 _qapp: QApplication = QApplication.instance() or QApplication(sys.argv[:1])  # type: ignore[assignment]
 
 
+@pytest.fixture(autouse=True)
+def _isolated_model_cache(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        "spkup.model_manager.platform_model_cache_dir",
+        lambda: tmp_path / "spkup" / "models",
+    )
+
+
 def test_model_cache_dir_created(tmp_path, monkeypatch):
     """model_cache_dir() creates the directory if it does not exist."""
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))

@@ -10,7 +10,7 @@
 - As of 2026-04-20, `spkup` is in maintenance mode.
 - Do not extend the original MVP phase files with new scope.
 - Every new non-trivial change should start as a dedicated spec or requirement issue in `specs/`.
-- Local validation remains required on the developer machine, even when matching CI or release automation exists.
+- Local validation remains required on the developer machine, even when matching CI or release automation exists. Platform work must record which OS and architecture were actually validated.
 
 ---
 
@@ -52,6 +52,7 @@ Before declaring a work item complete:
 - [ ] All required manual checks from the issue file have been performed locally
 - [ ] All acceptance criteria in the issue file's AC table are met
 - [ ] No stub print statements or placeholder slots remain in the code
+- [ ] For platform work, artifact names, runner architecture, and manual permission observations are recorded before the item is marked validated
 
 Update `progress.status.md`:
 - Set status to `Completed (validated)`
@@ -63,7 +64,7 @@ For release/versioning work, the repo follows one contract:
 - Source version format: `X.Y.Z`
 - Source of truth: `src/spkup/__init__.py`
 - Git tag format: `vX.Y.Z`
-- Release artifact names: derived directly from the same `X.Y.Z` value
+- Release artifact names: derived directly from the same `X.Y.Z` value, currently `spkup-X.Y.Z-windows-x64.zip` and `spkup-X.Y.Z-macos-arm64.zip`
 
 The detailed operator workflow for preparing and cutting a release is documented in [docs/06-packaging-release.md](docs/06-packaging-release.md).
 

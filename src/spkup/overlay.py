@@ -10,6 +10,8 @@ from PyQt6.QtCore import QEasingCurve, QPropertyAnimation, QRect, Qt, QTimer
 from PyQt6.QtGui import QColor, QFont, QPaintEvent, QPainter
 from PyQt6.QtWidgets import QApplication, QWidget
 
+from spkup.platform_support import is_macos
+
 _MARGIN = 16
 _PILL_W, _PILL_H = 220, 44
 _CORNER_RADIUS = 6
@@ -98,12 +100,26 @@ class OverlayWidget(QWidget):
             OverlayState.ERROR: error_animation,
         }
 
-        self.setWindowFlags(
-            Qt.WindowType.FramelessWindowHint
-            | Qt.WindowType.WindowStaysOnTopHint
-            | Qt.WindowType.Tool
-            | Qt.WindowType.WindowTransparentForInput
-        )
+        # On macOS, Qt.WindowType.Tool windows are tied to the owning app
+        # being frontmost. spkup is a menu-bar app that never becomes frontmost,
+        # so a Tool window would never display. Use a plain frameless top-level
+        # window with WA_TransparentForMouseEvents instead so the overlay stays
+        # visible and click-through on macOS.
+        if is_macos():
+            self.setWindowFlags(
+                Qt.WindowType.FramelessWindowHint
+                | Qt.WindowType.WindowStaysOnTopHint
+                | Qt.WindowType.WindowDoesNotAcceptFocus
+                | Qt.WindowType.BypassWindowManagerHint
+            )
+            self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        else:
+            self.setWindowFlags(
+                Qt.WindowType.FramelessWindowHint
+                | Qt.WindowType.WindowStaysOnTopHint
+                | Qt.WindowType.Tool
+                | Qt.WindowType.WindowTransparentForInput
+            )
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
         self.setFixedSize(_PILL_W, _PILL_H)
 

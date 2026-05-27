@@ -11,12 +11,15 @@ from typing import Any
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from spkup import __version__
+from spkup.platform_support import artifact_name, current_platform_tag
 
 _log = logging.getLogger(__name__)
 
 RELEASES_API_URL = "https://api.github.com/repos/andremorata/spkup/releases"
 _SEMVER_TAG_RE = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)$")
-_WINDOWS_ASSET_RE = re.compile(r"^spkup-(\d+\.\d+\.\d+)-windows-x64\.zip$")
+_PLATFORM_ASSET_RE = re.compile(
+    r"^spkup-(\d+\.\d+\.\d+)-(windows-x64|macos-arm64)\.zip$"
+)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -64,11 +67,15 @@ def _release_version(release: dict[str, Any]) -> tuple[str, tuple[int, int, int]
     return ".".join(str(part) for part in version), version
 
 
-def _select_windows_asset(
+def _select_platform_asset(
     release: dict[str, Any],
     version: str,
+    platform_tag: str,
 ) -> ReleaseAsset | None:
-    expected_name = f"spkup-{version}-windows-x64.zip"
+    expected_name = artifact_name(version, platform_tag)
+    if expected_name is None:
+        return None
+
     fallback: ReleaseAsset | None = None
 
     for raw_asset in release.get("assets", []):
@@ -79,8 +86,12 @@ def _select_windows_asset(
         if not name or not url:
             continue
 
-        match = _WINDOWS_ASSET_RE.match(name)
-        if match is None or match.group(1) != version:
+        match = _PLATFORM_ASSET_RE.match(name)
+        if (
+            match is None
+            or match.group(1) != version
+            or match.group(2) != platform_tag
+        ):
             continue
 
         asset = ReleaseAsset(
@@ -98,7 +109,13 @@ def _select_windows_asset(
 def select_available_update(
     releases: list[dict[str, Any]],
     current_version: str = __version__,
+    platform_tag: str | None = None,
 ) -> UpdateInfo | None:
+    target_platform = current_platform_tag() if platform_tag is None else platform_tag
+    if target_platform is None:
+        _log.info("Skipping update check: unsupported platform")
+        return None
+
     candidates: list[tuple[tuple[int, int, int], UpdateInfo]] = []
 
     for release in releases:
@@ -113,11 +130,12 @@ def select_available_update(
         if not is_newer_version(version, current_version):
             continue
 
-        asset = _select_windows_asset(release, version)
+        asset = _select_platform_asset(release, version, target_platform)
         if asset is None:
             _log.info(
-                "Ignoring release %s: no matching Windows ZIP asset",
+                "Ignoring release %s: no matching %s ZIP asset",
                 release.get("tag_name"),
+                target_platform,
             )
             continue
 
@@ -151,6 +169,7 @@ def fetch_available_update(
     current_version: str = __version__,
     releases_url: str = RELEASES_API_URL,
     timeout_seconds: float = 8.0,
+    platform_tag: str | None = None,
 ) -> UpdateInfo | None:
     request = urllib.request.Request(
         releases_url,
@@ -174,7 +193,11 @@ def fetch_available_update(
     if not isinstance(data, list):
         raise UpdateCheckError("GitHub Releases response had an unexpected shape")
 
-    return select_available_update(data, current_version=current_version)
+    return select_available_update(
+        data,
+        current_version=current_version,
+        platform_tag=platform_tag,
+    )
 
 
 class UpdateCheckWorker(QThread):
@@ -187,11 +210,13 @@ class UpdateCheckWorker(QThread):
         current_version: str = __version__,
         releases_url: str = RELEASES_API_URL,
         timeout_seconds: float = 8.0,
+        platform_tag: str | None = None,
     ) -> None:
         super().__init__()
         self._current_version = current_version
         self._releases_url = releases_url
         self._timeout_seconds = timeout_seconds
+        self._platform_tag = platform_tag
 
     def run(self) -> None:
         try:
@@ -199,6 +224,7 @@ class UpdateCheckWorker(QThread):
                 current_version=self._current_version,
                 releases_url=self._releases_url,
                 timeout_seconds=self._timeout_seconds,
+                platform_tag=self._platform_tag,
             )
         except UpdateCheckError as exc:
             self.error.emit(str(exc))

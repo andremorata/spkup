@@ -6,16 +6,18 @@
 
 ## 1. Overview
 
-spkup is a single-process Windows desktop application. There is no server, no database, and no web frontend. Core transcription runs locally on the user's machine; the only runtime network path is the optional startup update check against GitHub Releases.
+spkup is a single-process desktop application for Windows 11 x64 and Apple Silicon macOS. There is no server, no database, and no web frontend. Core transcription runs locally on the user's machine; the only runtime network path is the optional startup update check against GitHub Releases.
 
 - **Runtime:** Python 3.12, single process
 - **GUI framework:** PyQt6 — tray icon, overlay widget, settings dialog, clipboard
-- **Inference:** faster-whisper (CTranslate2, CUDA) — runs on a QThread worker
-- **GPU runtime packaging:** release bundles include NVIDIA CUDA/cuDNN wheel DLLs and fail packaging validation if critical DLLs are missing
+- **Inference:** faster-whisper (CTranslate2) — runs on a QThread worker; Windows defaults to CUDA, macOS defaults to CPU/int8
+- **GPU runtime packaging:** Windows release bundles include NVIDIA CUDA/cuDNN wheel DLLs and fail packaging validation if critical DLLs are missing
 - **Audio:** sounddevice (PortAudio) — 16 kHz mono float32, stays in memory as numpy arrays
 - **Hotkey:** pynput — background thread, marshalled to Qt main thread via QMetaObject
-- **Persistence:** JSON config file at `%APPDATA%/spkup/config.json`; model cache at `%LOCALAPPDATA%/spkup/models`; update staging at `%LOCALAPPDATA%/spkup/updates`
-- **Logging:** rotating file log at `%LOCALAPPDATA%/spkup/spkup.log`
+- **Persistence:** platform paths from `platform_support.py`
+  - Windows: `%APPDATA%/spkup/config.json`, `%LOCALAPPDATA%/spkup/models`, `%LOCALAPPDATA%/spkup/updates`
+  - macOS: `~/Library/Application Support/spkup/config.json`, `~/Library/Caches/spkup/models`, `~/Library/Caches/spkup/updates`
+- **Logging:** Windows writes `%LOCALAPPDATA%/spkup/spkup.log`; macOS writes `~/Library/Logs/spkup/spkup.log`
 
 ---
 
@@ -31,13 +33,13 @@ flowchart TD
     REC -- recording_finished\nnp.ndarray --> App
     App -- transcribe --> TR[Transcriber\nQObject facade]
     TR -- runs on --> TW[_TranscriptionWorker\nQThread]
-    TW -- faster-whisper\nCUDA --> ML[(Model\n%LOCALAPPDATA%)]
+    TW -- faster-whisper\nplatform device --> ML[(Model\nplatform cache)]
     TW -- transcription_finished --> TR
     TR --> App
     App -- add/list/delete --> RH[TranscriptionHistory\nsession memory]
     App -- set_entries/show --> HW[TranscriptionHistoryWindow\nnon-modal QDialog]
     App -- mute / restore --> PM[PlaybackMuteController\nrecording session state]
-    PM -- get_mute / set_mute --> PB[WindowsPlaybackMuteBackend\nctypes Core Audio]
+    PM -- get_mute / set_mute --> PB[WindowsPlaybackMuteBackend\nctypes Core Audio\nWindows only]
     App -- setText --> CB[Clipboard\nQApplication]
     HW -- copy selected --> CB
     App -- show_state --> OV[OverlayWidget\nframeless QWidget]
@@ -46,7 +48,7 @@ flowchart TD
     App -- startup check --> UC[UpdateCheckWorker\nGitHub Releases]
     UC -- UpdateInfo --> App
     App -- confirm/download/apply --> UP[Updater\nstaged helper process]
-    UP -- download ZIP --> GH[GitHub Releases\nspkup-X.Y.Z-windows-x64.zip]
+    UP -- download ZIP --> GH[GitHub Releases\nplatform ZIP asset]
 ```
 
 ---
@@ -56,6 +58,7 @@ flowchart TD
 | Module | Class / Function | Responsibility |
 | --- | --- | --- |
 | `config.py` | `AppConfig` | Settings dataclass; JSON load/save with atomic write |
+| `platform_support.py` | functions | Platform tags, path selection, platform-specific defaults, and feature capability gates |
 | `hotkey.py` | `HotkeyListener` | pynput keyboard listener; emits `recording_started` / `recording_stopped` on Qt main thread |
 | `recorder.py` | `AudioRecorder` | sounddevice stream; accumulates float32 chunks; emits `recording_finished(np.ndarray)` |
 | `transcriber.py` | `Transcriber` | Facade; owns `_TranscriptionWorker` lifecycle; busy guard; emits `transcription_finished(str)` |
@@ -69,10 +72,10 @@ flowchart TD
 | `transcription_history.py` | `TranscriptionHistoryEntry` | Immutable history item with stable session-local id and text |
 | `transcription_history_window.py` | `TranscriptionHistoryWindow` | Non-modal recent-history window; previews entries and emits copy/delete requests |
 | `playback_mute.py` | `PlaybackMuteController` | Snapshots and restores the default playback mute state around a recording session |
-| `playback_mute.py` | `WindowsPlaybackMuteBackend` | Windows Core Audio mute backend for the default playback endpoint via `ctypes` |
-| `autostart.py` | functions | `winreg` HKCU Run key management |
-| `update_checker.py` | `UpdateCheckWorker`, `select_available_update` | Non-blocking GitHub Releases lookup; semantic version comparison; Windows ZIP asset selection |
-| `updater.py` | `UpdateDownloadWorker`, `launch_staged_update` | Downloads a confirmed release ZIP and launches a PowerShell helper that applies the update after the frozen app exits |
+| `playback_mute.py` | `WindowsPlaybackMuteBackend` | Windows-only Core Audio mute backend for the default playback endpoint via `ctypes` |
+| `autostart.py` | functions | Windows-only `winreg` HKCU Run key management; unsupported platforms import safely and hide the UI control |
+| `update_checker.py` | `UpdateCheckWorker`, `select_available_update` | Non-blocking GitHub Releases lookup; semantic version comparison; platform ZIP asset selection |
+| `updater.py` | `UpdateDownloadWorker`, `launch_staged_update` | Downloads confirmed release ZIPs; automatic apply remains restricted to frozen Windows builds |
 | `logging_setup.py` | `configure_logging` | Rotating file handler + stderr handler |
 | `packaging_validation.py` | functions / CLI | Validates frozen PyInstaller bundles contain the CUDA/cuDNN DLLs required for GPU transcription before release upload |
 | `__main__.py` | `main` | Entry point: repair missing standard streams in windowed builds, add bundled NVIDIA DLL directories to the Windows loader path, configure logging, create `App`, call `run()` |
@@ -140,11 +143,12 @@ History window copy
 Startup update check
   → if AppConfig.check_updates_on_startup
     → UpdateCheckWorker queries GitHub Releases on a QThread
-    → if newer eligible release with matching Windows ZIP exists
-      → App asks the user before download/apply
-      → UpdateDownloadWorker downloads the ZIP to %LOCALAPPDATA%/spkup/updates
-      → updater validates the archive and launches a helper PowerShell process
+    → if newer eligible release with matching platform ZIP exists
+      → Windows frozen build asks the user before download/apply
+      → UpdateDownloadWorker downloads the ZIP to platform update staging
+      → Windows updater validates the archive and launches a helper PowerShell process
       → App quits; helper extracts the new bundle and starts updated spkup.exe
+      → macOS detects the matching asset but leaves update apply manual
 ```
 
 ---
@@ -159,7 +163,7 @@ Startup update check
 | `_ModelDownloadWorker` (QThread) | HuggingFace model download | `pyqtSignal` → main thread |
 | `UpdateCheckWorker` (QThread) | GitHub Releases metadata request | `pyqtSignal` → main thread |
 | `UpdateDownloadWorker` (QThread) | Confirmed release ZIP download | `pyqtSignal` → main thread |
-| updater helper process | Wait for frozen app exit, extract release ZIP, start updated exe | Separate PowerShell process |
+| updater helper process | Wait for frozen Windows app exit, extract release ZIP, start updated exe | Separate PowerShell process |
 
 **Rule:** No `QWidget` or `QApplication` method is ever called from a non-Qt thread.
 
@@ -173,12 +177,12 @@ Startup update check
 | --- | --- | --- |
 | `hotkey` | `"ctrl+shift+space"` | Parsed by `parse_hotkey()` in `hotkey.py` |
 | `model_size` | `"large-v3"` | Any faster-whisper model name |
-| `device` | `"cuda"` | `"cuda"` or `"cpu"` |
-| `compute_type` | `"float16"` | `"float16"`, `"int8"`, or `"float32"` |
+| `device` | Windows: `"cuda"`; macOS: `"cpu"` | `"cuda"` or `"cpu"` |
+| `compute_type` | `"int8"` | `"float16"`, `"int8"`, or `"float32"` |
 | `overlay_position` | `"bottom-right"` | `"bottom-right"`, `"bottom-left"`, `"top-right"`, `"top-left"` |
 | `max_recording_seconds` | `120` | Safety cutoff for `AudioRecorder`; also drives the live recording countdown shown in the overlay |
-| `mute_playback_while_recording` | `False` | When enabled, snapshot the default playback mute state, mute during active capture, and restore on stop/error/quit |
-| `check_updates_on_startup` | `True` | When enabled, startup checks GitHub Releases for a newer Windows ZIP; the app asks before downloading or applying |
+| `mute_playback_while_recording` | `False` | Windows-only; hidden/disabled on macOS |
+| `check_updates_on_startup` | `True` | When enabled, startup checks GitHub Releases for a newer platform ZIP; Windows can auto-apply after confirmation, macOS is manual-update only |
 
 ---
 
@@ -193,6 +197,7 @@ Startup update check
 | 2026-04-01 | QThread for transcription | Never block the UI thread during inference |
 | 2026-04-01 | Atomic config write (temp file → rename) | Prevent corrupt config on crash during save |
 | 2026-05-20 | Confirm-before-apply startup updates | Use the existing GitHub Releases ZIP channel without silent downloads or silent installs |
+| 2026-05-27 | Add macOS ARM64 support without migrating Windows baseline | Platform abstractions preserve Windows paths, artifacts, CUDA validation, and auto-update apply while adding CPU-oriented Apple Silicon runtime and packaging |
 
 ---
 
@@ -203,6 +208,8 @@ e:\spkup\
   pyproject.toml
   requirements.txt
   run.bat
+  spkup.spec
+  spkup-macos.spec
   src/spkup/
     __init__.py
     __main__.py
@@ -222,6 +229,7 @@ e:\spkup\
     update_checker.py
     updater.py
     logging_setup.py
+    platform_support.py
     resources/
       tray.png
   tests/

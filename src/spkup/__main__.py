@@ -106,4 +106,13 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    # PyInstaller frozen builds use ``multiprocessing`` via ctranslate2 /
+    # faster-whisper. On macOS the default start method is ``spawn``, which
+    # re-executes the frozen binary in each worker. Without ``freeze_support``
+    # the child runs the full app a second time (visible tray icon, second
+    # transcription job, etc.) instead of acting as a worker. This call must
+    # happen before any code that could spawn a process.
+    import multiprocessing
+
+    multiprocessing.freeze_support()
     sys.exit(main())

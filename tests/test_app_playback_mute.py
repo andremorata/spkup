@@ -15,6 +15,7 @@ import sys
 from typing import cast
 from unittest.mock import MagicMock, patch
 
+import pytest
 from PyQt6.QtCore import QObject
 from PyQt6.QtWidgets import QApplication
 
@@ -25,6 +26,11 @@ from spkup.playback_mute import PlaybackMuteController
 # Ensure a QApplication exists for the Qt calls inside _on_recording_stopped
 # and _on_recording_error (specifically _make_tray_icon which creates a QPixmap).
 _qapp: QApplication = QApplication.instance() or QApplication(sys.argv[:1])  # type: ignore[assignment]
+
+
+@pytest.fixture(autouse=True)
+def _windows_playback_mute_capability(monkeypatch):
+    monkeypatch.setattr("spkup.app.supports_playback_mute", lambda: True)
 
 
 # ---------------------------------------------------------------------------

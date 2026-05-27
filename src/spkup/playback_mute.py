@@ -4,6 +4,8 @@ import logging
 import sys
 from typing import Any, Protocol
 
+from spkup.platform_support import supports_playback_mute
+
 _log = logging.getLogger(__name__)
 
 
@@ -79,7 +81,7 @@ class PlaybackMuteController:
 
 
 def _create_default_backend() -> PlaybackMuteBackend | None:
-    if sys.platform != "win32":
+    if not supports_playback_mute():
         return None
     return WindowsPlaybackMuteBackend()
 

@@ -12,7 +12,7 @@
 - **Success definition:** Hold a hotkey → speak → release → transcribed text is in the clipboard within a few seconds, with visual feedback via an on-screen overlay.
 - **Primary users:** Single user (personal tool), Windows 11, RTX 4070 (8 GB VRAM).
 - **Lifecycle mode:** Maintenance mode as of 2026-04-20. The original MVP build-out is considered complete and frozen as historical baseline.
-- **Delivery constraints:** No server infrastructure. Local-first Windows desktop app. Packaging, CI/CD, versioning, and distribution are part of the current baseline.
+- **Delivery constraints:** No server infrastructure. Current production baseline is a local-first Windows desktop app. macOS ARM64 support is planned as a post-MVP maintenance extension. Packaging, CI/CD, versioning, and distribution are part of the current baseline.
 - **Change policy:** New non-trivial work must be tracked as a new spec or requirement in `specs/`; do not extend `phase1` through `phase9`.
 
 ---
@@ -35,6 +35,7 @@
 | CI/CD | GitHub Actions | Implemented | CI and tagged-release workflows exist |
 | Versioning | `X.Y.Z` + Git tags `vX.Y.Z` | Implemented | Source version in `src/spkup/__init__.py`; release tags align to source version |
 | Distribution | GitHub Releases | Implemented | Tagged release workflow publishes the Windows artifact |
+| Target platforms | Windows 11 x64; macOS ARM64 | Windows implemented; macOS implementation in validation | macOS ARM64 support is tracked in `specs/spec-macos-arm64-support.issue.md` |
 | License | No constraints | Confirmed | Personal tool |
 
 ---
@@ -45,8 +46,8 @@
 - `language=None` in faster-whisper for auto-detect; handles mixed PT+EN code-switching.
 - Model is lazy-loaded on first transcription to avoid consuming VRAM at startup.
 - `large-v3` with `float16` fits in 8 GB VRAM; fallback to CPU on OOM.
-- Hotkey config persisted in `%APPDATA%/spkup/config.json`.
-- Model cache stored in `%LOCALAPPDATA%/spkup/models`.
+- Hotkey config persists in `%APPDATA%/spkup/config.json` on Windows and `~/Library/Application Support/spkup/config.json` on macOS.
+- Model cache is stored in `%LOCALAPPDATA%/spkup/models` on Windows and `~/Library/Caches/spkup/models` on macOS.
 
 ---
 
@@ -111,6 +112,7 @@ Hotkey tapped again → recording_stopped → Recorder.stop()
 | CUDA OOM if model size changes | Medium | Catch `OutOfMemoryError`; fallback to CPU | Open |
 | Transcription hangs on cold boot / CUDA init | Medium | Watchdog timer (300s default); auto-retry on CPU; manual retry via tray | Mitigated |
 | pynput requires no admin but may miss keys if focus is unusual | Low | Document known limitation; test common apps | Open |
+| macOS permissions and unsigned app distribution | Medium | Document Accessibility/Input Monitoring and Microphone permissions; defer signing/notarization to a separate item | Planned |
 
 ---
 
@@ -129,3 +131,5 @@ Hotkey tapped again → recording_stopped → Recorder.stop()
 - [x] Recording overlay shows remaining capture time before the existing safety cutoff
 - [x] Manual cancellation of in-progress transcription delivered as a hotkey-first slice with a shared app-level cancel entry point ready for a future overlay button
 - [x] Startup auto-update maintenance item opened in `specs/`
+- [x] macOS ARM64 support maintenance item opened in `specs/`
+- [x] macOS ARM64 implementation path added; validation remains open before support is marked complete

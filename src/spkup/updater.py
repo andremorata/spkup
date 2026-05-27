@@ -13,6 +13,12 @@ import urllib.request
 
 from PyQt6.QtCore import QThread, pyqtSignal
 
+from spkup.platform_support import (
+    WINDOWS_X64_TAG,
+    bundle_root_name,
+    supports_automatic_update_apply,
+    update_staging_root,
+)
 from spkup.update_checker import UpdateInfo
 
 _log = logging.getLogger(__name__)
@@ -23,12 +29,11 @@ class UpdateApplyError(RuntimeError):
 
 
 def is_frozen_windows_build() -> bool:
-    return sys.platform == "win32" and bool(getattr(sys, "frozen", False))
+    return supports_automatic_update_apply() and bool(getattr(sys, "frozen", False))
 
 
 def update_staging_dir(version: str) -> Path:
-    base = Path(os.environ.get("LOCALAPPDATA", os.environ.get("APPDATA", ".")))
-    return base / "spkup" / "updates" / version
+    return update_staging_root() / version
 
 
 def download_update_asset(update: UpdateInfo, destination_dir: Path | None = None) -> Path:
@@ -55,9 +60,18 @@ def download_update_asset(update: UpdateInfo, destination_dir: Path | None = Non
     return destination
 
 
-def validate_update_archive(zip_path: Path, version: str) -> str:
-    expected_root = f"spkup-{version}-windows-x64"
+def validate_update_archive(
+    zip_path: Path,
+    version: str,
+    platform_tag: str = WINDOWS_X64_TAG,
+) -> str:
+    expected_root = bundle_root_name(version, platform_tag)
+    if expected_root is None:
+        raise UpdateApplyError(f"Unsupported update platform: {platform_tag}")
+
     expected_exe = f"{expected_root}/spkup.exe"
+    if platform_tag == "macos-arm64":
+        expected_exe = f"{expected_root}/spkup.app/Contents/MacOS/spkup"
 
     try:
         with zipfile.ZipFile(zip_path) as archive:

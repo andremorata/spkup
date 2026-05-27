@@ -53,6 +53,7 @@ def test_select_available_update_picks_highest_eligible_release() -> None:
             _release("0.9.0", draft=True),
         ],
         current_version="0.2.3",
+        platform_tag="windows-x64",
     )
 
     assert update is not None
@@ -61,7 +62,11 @@ def test_select_available_update_picks_highest_eligible_release() -> None:
 
 
 def test_select_available_update_includes_nightly_prereleases() -> None:
-    update = select_available_update([_release("0.2.4", prerelease=True)], "0.2.3")
+    update = select_available_update(
+        [_release("0.2.4", prerelease=True)],
+        "0.2.3",
+        platform_tag="windows-x64",
+    )
 
     assert update is not None
     assert update.prerelease is True
@@ -81,6 +86,7 @@ def test_select_available_update_returns_none_without_matching_asset() -> None:
             )
         ],
         current_version="0.2.3",
+        platform_tag="windows-x64",
     )
 
     assert update is None
@@ -107,7 +113,11 @@ def test_fetch_available_update_uses_github_releases_api(monkeypatch) -> None:
 
     monkeypatch.setattr("spkup.update_checker.urllib.request.urlopen", fake_urlopen)
 
-    update = fetch_available_update(current_version="0.2.3", timeout_seconds=3)
+    update = fetch_available_update(
+        current_version="0.2.3",
+        timeout_seconds=3,
+        platform_tag="windows-x64",
+    )
 
     assert update is not None
     assert update.version == "0.2.4"
@@ -135,4 +145,40 @@ def test_fetch_available_update_rejects_unexpected_response(monkeypatch) -> None
     )
 
     with pytest.raises(UpdateCheckError, match="unexpected shape"):
-        fetch_available_update(current_version="0.2.3")
+        fetch_available_update(current_version="0.2.3", platform_tag="windows-x64")
+
+
+def test_select_available_update_picks_macos_asset() -> None:
+    update = select_available_update(
+        [
+            _release(
+                "0.2.4",
+                assets=[
+                    {
+                        "name": "spkup-0.2.4-windows-x64.zip",
+                        "browser_download_url": "https://example.test/windows.zip",
+                    },
+                    {
+                        "name": "spkup-0.2.4-macos-arm64.zip",
+                        "browser_download_url": "https://example.test/macos.zip",
+                    },
+                ],
+            )
+        ],
+        current_version="0.2.3",
+        platform_tag="macos-arm64",
+    )
+
+    assert update is not None
+    assert update.asset.name == "spkup-0.2.4-macos-arm64.zip"
+
+
+def test_select_available_update_returns_none_without_target_platform_asset() -> None:
+    assert (
+        select_available_update(
+            [_release("0.2.4")],
+            current_version="0.2.3",
+            platform_tag="linux-x64",
+        )
+        is None
+    )

@@ -1,6 +1,6 @@
 import json
 
-from spkup.config import AppConfig, load, save
+from spkup.config import AppConfig, default_config, load, save
 
 
 def test_load_defaults(tmp_path, monkeypatch):
@@ -12,7 +12,7 @@ def test_load_defaults(tmp_path, monkeypatch):
 
     result = load()
 
-    assert result == AppConfig()
+    assert result == default_config()
     assert result.mute_playback_while_recording is False
     assert result.check_updates_on_startup is True
     assert cfg_path.exists()
@@ -126,6 +126,31 @@ def test_load_missing_input_device_falls_back_to_none(tmp_path, monkeypatch) -> 
 
 def test_check_updates_on_startup_defaults_to_true() -> None:
     assert AppConfig().check_updates_on_startup is True
+
+
+def test_default_config_uses_platform_safe_device(monkeypatch) -> None:
+    monkeypatch.setattr("spkup.platform_support.sys.platform", "darwin")
+
+    cfg = default_config()
+
+    assert cfg.device == "cpu"
+    assert cfg.compute_type == "int8"
+
+
+def test_load_missing_device_uses_platform_default(tmp_path, monkeypatch) -> None:
+    cfg_dir = tmp_path / "spkup"
+    cfg_dir.mkdir(parents=True)
+    cfg_path = cfg_dir / "config.json"
+    monkeypatch.setattr("spkup.config.CONFIG_DIR", cfg_dir)
+    monkeypatch.setattr("spkup.config.CONFIG_PATH", cfg_path)
+    monkeypatch.setattr("spkup.platform_support.sys.platform", "darwin")
+
+    cfg_path.write_text(json.dumps({"hotkey": "f9"}), encoding="utf-8")
+
+    result = load()
+
+    assert result.device == "cpu"
+    assert result.compute_type == "int8"
 
 
 def test_load_missing_update_check_falls_back_to_enabled(tmp_path, monkeypatch) -> None:

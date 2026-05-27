@@ -36,10 +36,28 @@ def _write_update_zip(path: Path, version: str = "1.2.3") -> Path:
     return path
 
 
+def _write_macos_update_zip(path: Path, version: str = "1.2.3") -> Path:
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr(
+            f"spkup-{version}-macos-arm64/spkup.app/Contents/MacOS/spkup",
+            "",
+        )
+    return path
+
+
 def test_validate_update_archive_requires_expected_exe(tmp_path) -> None:
     archive = _write_update_zip(tmp_path / "update.zip")
 
     assert validate_update_archive(archive, "1.2.3") == "spkup-1.2.3-windows-x64"
+
+
+def test_validate_update_archive_accepts_macos_bundle_shape(tmp_path) -> None:
+    archive = _write_macos_update_zip(tmp_path / "macos-update.zip")
+
+    assert (
+        validate_update_archive(archive, "1.2.3", platform_tag="macos-arm64")
+        == "spkup-1.2.3-macos-arm64"
+    )
 
 
 def test_validate_update_archive_rejects_wrong_shape(tmp_path) -> None:

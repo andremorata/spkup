@@ -1,6 +1,6 @@
 # spkup
 
-Push-to-talk speech-to-text for Windows. Hold a hotkey or single-click the tray icon, speak, release or click again — transcribed text lands in your clipboard.
+Push-to-talk speech-to-text for Windows and Apple Silicon macOS. Hold a hotkey or single-click the tray/menu-bar icon, speak, release or click again — transcribed text lands in your clipboard.
 
 - Global hotkey (configurable, default `Ctrl+Shift+Space`)
 - Single left-click tray icon toggle for record / stop
@@ -10,11 +10,15 @@ Push-to-talk speech-to-text for Windows. Hold a hotkey or single-click the tray 
 - Lives in the system tray; zero friction
 - Startup update checks against GitHub Releases, enabled by default and confirm-before-apply
 
-**Target machine:** Windows 11, Python 3.12, RTX 4070 (8 GB VRAM)
+**Supported platforms:** Windows 11 x64 and macOS ARM64 / Apple Silicon, Python 3.12.
+
+Windows remains the GPU-accelerated production baseline with NVIDIA CUDA/cuDNN runtime packaging. macOS support is CPU-oriented in the first ARM64 slice.
 
 ---
 
 ## Setup
+
+Windows:
 
 ```bash
 cd E:\spkup
@@ -25,6 +29,17 @@ pip install -r requirements.txt
 
 On Windows, `requirements.txt` includes NVIDIA CUDA/cuDNN runtime wheels so
 local PyInstaller bundles match GPU-capable GitHub release artifacts.
+
+macOS ARM64:
+
+```bash
+cd /path/to/spkup
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -e ".[dev,build]"
+```
+
+macOS requires Microphone permission for recording and Accessibility/Input Monitoring permission for global hotkey capture. The first macOS package is unsigned and non-notarized, so Gatekeeper may require manual approval.
 
 Run:
 
@@ -47,11 +62,13 @@ The project uses one release version contract:
 - Source version lives in `src/spkup/__init__.py` as `__version__ = "X.Y.Z"`
 - Build metadata reads that version through Hatchling dynamic metadata in `pyproject.toml`
 - Git release tags must be `vX.Y.Z` for the same source version
-- Initial Windows release artifacts should derive from that same version, for example `spkup-X.Y.Z-windows-x64.zip`
+- Release artifacts derive from that same version:
+  - `spkup-X.Y.Z-windows-x64.zip`
+  - `spkup-X.Y.Z-macos-arm64.zip`
 
 The repository also has tagged-release automation, but the versioning contract above remains the single source of truth for release preparation.
 
-Packaged Windows builds check GitHub Releases on startup by default. When a newer `spkup-X.Y.Z-windows-x64.zip` release is available, Spkup asks before downloading or applying it; the check can be disabled in Settings.
+Packaged builds check GitHub Releases on startup by default. Windows builds can download and apply matching Windows ZIP updates after confirmation. macOS builds detect matching macOS ARM64 releases but do not auto-apply them until a signed/notarized update strategy exists; users update manually from the release asset.
 
 ---
 
@@ -64,7 +81,7 @@ Packaged Windows builds check GitHub Releases on startup by default. When a newe
 | [docs/03-testing.md](docs/03-testing.md) | What gets unit tests, what gets manual verification, TDD rules |
 | [docs/04-delivery-workflow.md](docs/04-delivery-workflow.md) | Maintenance workflow, definition of done, historical MVP roadmap |
 | [docs/05-ai-agent-workflow.md](docs/05-ai-agent-workflow.md) | Rules for AI agents working in this repo |
-| [docs/06-packaging-release.md](docs/06-packaging-release.md) | Versioning contract, Windows artifact baseline, operator release workflow |
+| [docs/06-packaging-release.md](docs/06-packaging-release.md) | Versioning contract, platform artifact baselines, operator release workflow |
 
 ## Delivery Specs
 

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-import os
 import shutil
 from pathlib import Path
 
 from PyQt6.QtCore import QThread, pyqtSignal
+
+from spkup.platform_support import model_cache_dir as platform_model_cache_dir
 
 
 # Approximate on-disk sizes for the CT2-converted Systran faster-whisper
@@ -40,7 +41,7 @@ class ModelNotFoundError(FileNotFoundError):
 
 def model_cache_dir() -> Path:
     """Return (and create if needed) the local models cache directory."""
-    d = Path(os.environ["LOCALAPPDATA"]) / "spkup" / "models"
+    d = platform_model_cache_dir()
     d.mkdir(parents=True, exist_ok=True)
     return d
 

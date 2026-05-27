@@ -17,7 +17,7 @@ No APM, no distributed tracing, no metrics dashboards.
 
 | Property | Value |
 | --- | --- |
-| Location | `%LOCALAPPDATA%\spkup\spkup.log` |
+| Location | Windows: `%LOCALAPPDATA%\spkup\spkup.log`; macOS: `~/Library/Logs/spkup/spkup.log` |
 | Rotation | `RotatingFileHandler`, max 5 MB per file, 3 backups |
 | Format | `%(asctime)s %(levelname)-8s %(name)s — %(message)s` |
 | Handlers | File (rotating) + stderr |
@@ -70,10 +70,18 @@ The overlay transitions to `HIDDEN` on any error so it does not get stuck in TRA
 
 ## 6. Troubleshooting
 
-To diagnose an issue, open:
+To diagnose an issue, open the platform log file.
+
+Windows:
 
 ```
 %LOCALAPPDATA%\spkup\spkup.log
+```
+
+macOS:
+
+```
+~/Library/Logs/spkup/spkup.log
 ```
 
 Useful filters:

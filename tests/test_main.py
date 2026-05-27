@@ -11,11 +11,14 @@ def test_runtime_dir_uses_source_path_when_not_frozen() -> None:
         assert __main__.runtime_dir() == Path(__main__.__file__).resolve().parent
 
 
-def test_runtime_dir_uses_executable_parent_when_frozen() -> None:
+def test_runtime_dir_uses_executable_parent_when_frozen(tmp_path: Path) -> None:
+    executable = tmp_path / "spkup" / "spkup"
+    executable.parent.mkdir()
+    executable.write_text("", encoding="utf-8")
     with patch.object(__main__.sys, "frozen", True, create=True), patch.object(
-        __main__.sys, "_MEIPASS", r"C:\Apps\spkup\_internal", create=True
-    ), patch.object(__main__.sys, "executable", r"C:\Apps\spkup\spkup.exe"):
-        assert __main__.runtime_dir() == Path(r"C:\Apps\spkup")
+        __main__.sys, "_MEIPASS", str(executable.parent / "_internal"), create=True
+    ), patch.object(__main__.sys, "executable", str(executable)):
+        assert __main__.runtime_dir() == executable.parent.resolve()
 
 
 def test_dll_search_dirs_scan_nvidia_bins_in_dev_mode(tmp_path: Path) -> None:

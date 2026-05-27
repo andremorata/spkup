@@ -1,16 +1,16 @@
 import logging
 import logging.handlers
-import os
-from pathlib import Path
 
-_LOG_DIR = Path(os.environ.get("LOCALAPPDATA", os.environ.get("APPDATA", "."))) / "spkup"
+from spkup.platform_support import user_log_dir
+
+_LOG_DIR = user_log_dir()
 LOG_PATH = _LOG_DIR / "spkup.log"
 
 _FMT = "%(asctime)s %(levelname)-8s %(name)s — %(message)s"
 
 
 def configure_logging() -> logging.Logger:
-    """Configure root logger: rotating file at %LOCALAPPDATA%/spkup/spkup.log + stderr."""
+    """Configure root logger with rotating file logging plus stderr warnings."""
     _LOG_DIR.mkdir(parents=True, exist_ok=True)
     fmt = logging.Formatter(_FMT)
 

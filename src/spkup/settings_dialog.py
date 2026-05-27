@@ -31,6 +31,7 @@ from spkup.model_manager import (
     is_downloaded,
 )
 from spkup.overlay import OverlayState, _STATE_COLORS
+from spkup.platform_support import supports_playback_mute
 
 
 def _detect_cuda() -> bool:
@@ -352,6 +353,7 @@ class SettingsDialog(QDialog):
                 if item is not None:
                     item.setEnabled(False)
             self._device_combo.setCurrentText("cpu")
+            self._config.device = "cpu"
         else:
             self._device_combo.setCurrentText(config.device)
         self._device_combo.currentTextChanged.connect(
@@ -377,6 +379,13 @@ class SettingsDialog(QDialog):
         self._mute_playback_checkbox.setToolTip(
             "Temporarily mute playback output while recording is active."
         )
+        if not supports_playback_mute():
+            self._mute_playback_checkbox.setChecked(False)
+            self._mute_playback_checkbox.setEnabled(False)
+            self._mute_playback_checkbox.setToolTip(
+                "Playback muting is currently available only on Windows."
+            )
+            self._config.mute_playback_while_recording = False
         self._mute_playback_checkbox.toggled.connect(
             lambda checked: setattr(
                 self._config,

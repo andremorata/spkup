@@ -4,6 +4,8 @@ import os
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
+from spkup.platform_support import default_compute_type, default_device, user_config_dir
+
 
 @dataclasses.dataclass
 class AppConfig:
@@ -24,19 +26,29 @@ class AppConfig:
     check_updates_on_startup: bool = True
 
 
-CONFIG_DIR = Path(os.environ["APPDATA"]) / "spkup"
+CONFIG_DIR = user_config_dir()
 CONFIG_PATH = CONFIG_DIR / "config.json"
+
+
+def default_config() -> AppConfig:
+    return AppConfig(
+        device=default_device(),
+        compute_type=default_compute_type(),
+    )
 
 
 def load() -> AppConfig:
     if not CONFIG_PATH.exists():
-        save(AppConfig())
-        return AppConfig()
+        config = default_config()
+        save(config)
+        return config
 
     raw = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
     valid_keys = {field.name for field in dataclasses.fields(AppConfig)}
     filtered = {key: value for key, value in raw.items() if key in valid_keys}
-    return AppConfig(**filtered)
+    values = dataclasses.asdict(default_config())
+    values.update(filtered)
+    return AppConfig(**values)
 
 
 def save(config: AppConfig) -> None:

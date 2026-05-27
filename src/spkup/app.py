@@ -17,6 +17,7 @@ from spkup.config import AppConfig, CONFIG_PATH, load, save
 from spkup.hotkey import HotkeyListener
 from spkup.model_manager import is_downloaded
 from spkup.overlay import OverlayState, OverlayWidget
+from spkup.platform_support import is_macos, supports_autostart, supports_playback_mute
 from spkup.playback_mute import PlaybackMuteController
 from spkup.recorder import AudioRecorder
 from spkup.sound_cues import play_cue
@@ -171,12 +172,14 @@ class App(QObject):
         assert settings_action is not None
         settings_action.triggered.connect(self._on_settings)
         self._menu.addSeparator()
-        self._autostart_action = self._menu.addAction("Start on login")
-        assert self._autostart_action is not None
-        self._autostart_action.setCheckable(True)
-        self._autostart_action.setChecked(is_autostart_enabled())
-        self._autostart_action.triggered.connect(self._on_autostart_toggled)
-        self._menu.addSeparator()
+        self._autostart_action: QAction | None = None
+        if supports_autostart():
+            self._autostart_action = self._menu.addAction("Start on login")
+            assert self._autostart_action is not None
+            self._autostart_action.setCheckable(True)
+            self._autostart_action.setChecked(is_autostart_enabled())
+            self._autostart_action.triggered.connect(self._on_autostart_toggled)
+            self._menu.addSeparator()
         history_action = self._menu.addAction("Recent transcriptions")
         assert history_action is not None
         history_action.triggered.connect(self._show_transcription_history)
@@ -237,13 +240,35 @@ class App(QObject):
 
         # Restart hotkey listener if hotkey changed
         if old.hotkey != new_config.hotkey:
-            if self._listener_active:
-                self._listener.stop()
-            self._listener = HotkeyListener(new_config.hotkey)
-            self._listener.recording_started.connect(self._on_hotkey_recording_started)
-            self._listener.recording_stopped.connect(self._on_hotkey_recording_stopped)
-            if self._listener_active:
-                self._listener.start()
+            if is_macos():
+                # pynput's macOS backend calls TSMGetInputSourceProperty via
+                # CFRunLoop/CGEventTap teardown; on macOS 14+ this triggers a
+                # dispatch_assert_queue SIGTRAP when stop()+start() are
+                # invoked in the same process. The new hotkey is already
+                # persisted by SettingsDialog._on_save, so defer activation
+                # to the next launch instead of restarting the listener.
+                _log.info(
+                    "Hotkey changed on macOS; deferring activation to next "
+                    "launch to avoid pynput in-process restart crash"
+                )
+                if QSystemTrayIcon.supportsMessages():
+                    self._tray.showMessage(
+                        "spkup",
+                        (
+                            f"Hotkey saved as {new_config.hotkey}. "
+                            "Restart spkup for it to take effect."
+                        ),
+                        QSystemTrayIcon.MessageIcon.Information,
+                        6000,
+                    )
+            else:
+                if self._listener_active:
+                    self._listener.stop()
+                self._listener = HotkeyListener(new_config.hotkey)
+                self._listener.recording_started.connect(self._on_hotkey_recording_started)
+                self._listener.recording_stopped.connect(self._on_hotkey_recording_stopped)
+                if self._listener_active:
+                    self._listener.start()
 
         # Reinitialize transcriber if model / device / compute type changed
         if (
@@ -354,8 +379,8 @@ class App(QObject):
                 self._tray.showMessage(
                     "spkup update available",
                     (
-                        f"Version {update.version} is available. Automatic apply is "
-                        "available only in packaged Windows builds."
+                        f"Version {update.version} is available as "
+                        f"{update.asset.name}. Download it from GitHub Releases."
                     ),
                     QSystemTrayIcon.MessageIcon.Information,
                     6000,
@@ -619,7 +644,7 @@ class App(QObject):
         self._recording_start_pending = False
         self._recording_active = True
 
-        if self._config.mute_playback_while_recording:
+        if self._config.mute_playback_while_recording and supports_playback_mute():
             self._playback_mute.mute_for_recording()
 
         self._recorder.start()
@@ -656,7 +681,7 @@ class App(QObject):
         self._timeout_was_cuda_retry = False
         self._set_retry_action_enabled(False)
 
-        if self._config.mute_playback_while_recording:
+        if self._config.mute_playback_while_recording and supports_playback_mute():
             self._recording_start_pending = True
             threading.Thread(target=self._play_start_cue_then_begin, daemon=True).start()
             return
@@ -844,6 +869,10 @@ class App(QObject):
             _log.warning("No audio available for retry")
 
     def _on_autostart_toggled(self, checked: bool) -> None:
+        if not supports_autostart():
+            _log.info("Ignoring autostart toggle on unsupported platform")
+            return
+
         if checked:
             enable_autostart()
             _log.info("Autostart enabled")

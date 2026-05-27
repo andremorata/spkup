@@ -9,7 +9,85 @@ permissions:
   contents: write
 
 jobs:
-  nightly:
+  prepare-nightly:
+    runs-on: ubuntu-latest
+
+    outputs:
+      has_changes: ${{ steps.changes.outputs.has_changes }}
+      version: ${{ steps.version.outputs.version }}
+      tag_name: ${{ steps.version.outputs.tag_name }}
+      windows_bundle_name: ${{ steps.artifacts.outputs.windows_bundle_name }}
+      windows_archive_name: ${{ steps.artifacts.outputs.windows_archive_name }}
+      macos_bundle_name: ${{ steps.artifacts.outputs.macos_bundle_name }}
+      macos_archive_name: ${{ steps.artifacts.outputs.macos_archive_name }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Check for changes since last release
+        id: changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          latest_tag="$(git tag -l 'v*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1 || true)"
+          if [[ -z "$latest_tag" ]]; then
+            echo "No v* tags found. Treating as first release."
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          elif [[ -z "$(git log "$latest_tag..HEAD" --oneline)" ]]; then
+            echo "No new commits since $latest_tag. Skipping release."
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "New commits since $latest_tag. Proceeding with release."
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Resolve version
+        id: version
+        if: steps.changes.outputs.has_changes == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          latest_tag="$(git tag -l 'v*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1 || true)"
+
+          if [[ -z "$latest_tag" ]]; then
+            new_version="$(python -c "namespace = {}; exec(compile(open('src/spkup/__init__.py', encoding='utf-8').read(), 'src/spkup/__init__.py', 'exec'), namespace); print(namespace['__version__'])")"
+            echo "No tags found. Using version from __init__.py: $new_version"
+          else
+            base_version="${latest_tag#v}"
+            IFS=. read -r major minor patch <<< "$base_version"
+            new_version="$major.$minor.$((patch + 1))"
+            echo "Latest tag: $latest_tag. Bumping to $new_version"
+
+            perl -0pi -e "s/__version__\\s*=\\s*['\\\"][0-9]+\\.[0-9]+\\.[0-9]+['\\\"]/__version__ = \\\"$new_version\\\"/" src/spkup/__init__.py
+
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add src/spkup/__init__.py
+            git commit -m "chore: bump version to $new_version [skip ci]"
+            git push origin HEAD:main
+          fi
+
+          echo "version=$new_version" >> "$GITHUB_OUTPUT"
+          echo "tag_name=v$new_version" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve artifact names
+        id: artifacts
+        if: steps.changes.outputs.has_changes == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ steps.version.outputs.version }}"
+          echo "windows_bundle_name=spkup-$version-windows-x64" >> "$GITHUB_OUTPUT"
+          echo "windows_archive_name=spkup-$version-windows-x64.zip" >> "$GITHUB_OUTPUT"
+          echo "macos_bundle_name=spkup-$version-macos-arm64" >> "$GITHUB_OUTPUT"
+          echo "macos_archive_name=spkup-$version-macos-arm64.zip" >> "$GITHUB_OUTPUT"
+
+  build-windows:
+    needs: prepare-nightly
+    if: needs.prepare-nightly.outputs.has_changes == 'true'
     runs-on: windows-latest
 
     env:
@@ -20,96 +98,22 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
         with:
-          fetch-depth: 0
-
-      - name: Check for changes since last release
-        id: changes
-        shell: pwsh
-        run: |
-          $latestTag = git describe --tags --abbrev=0 --match "v*" 2>$null
-          if ($LASTEXITCODE -ne 0 -or -not $latestTag) {
-            Write-Host "No v* tags found. Treating as first release."
-            "has_changes=true" >> $env:GITHUB_OUTPUT
-          } else {
-            $commits = git log "$latestTag..HEAD" --oneline
-            if (-not $commits) {
-              Write-Host "No new commits since $latestTag. Skipping release."
-              "has_changes=false" >> $env:GITHUB_OUTPUT
-            } else {
-              Write-Host "New commits since $latestTag. Proceeding with release."
-              "has_changes=true" >> $env:GITHUB_OUTPUT
-            }
-          }
+          ref: main
 
       - name: Set up Python
-        if: steps.changes.outputs.has_changes == 'true'
         uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
 
-      - name: Resolve version
-        id: version
-        if: steps.changes.outputs.has_changes == 'true'
-        shell: pwsh
-        run: |
-          # Always base the next version on the highest semver tag, not on __init__.py
-          # and not on the most recent tag in git history.
-          # This ensures a manually-created release (e.g. v0.2.0) is never ignored
-          # even if a lower tag (e.g. v0.1.2) was created afterwards.
-          $latestTag = git tag -l "v*" |
-            Where-Object { $_ -match '^v\d+\.\d+\.\d+$' } |
-            Sort-Object {
-              $p = ($_ -replace '^v','') -split '\.'
-              [int]$p[0] * 1000000 + [int]$p[1] * 1000 + [int]$p[2]
-            } |
-            Select-Object -Last 1
-
-          if (-not $latestTag) {
-            # No tags exist yet — fall back to __init__.py for first-ever release.
-            $newVersion = python -c "namespace = {}; exec(compile(open('src/spkup/__init__.py', encoding='utf-8').read(), 'src/spkup/__init__.py', 'exec'), namespace); print(namespace['__version__'])"
-            if ($LASTEXITCODE -ne 0) {
-              throw "Failed to read __version__ from src/spkup/__init__.py"
-            }
-            Write-Host "No tags found. Using version from __init__.py: $newVersion"
-          } else {
-            $baseVersion = $latestTag -replace '^v', ''
-            $parts = $baseVersion -split '\.'
-            $newVersion = "$($parts[0]).$($parts[1]).$([int]$parts[2] + 1)"
-            Write-Host "Latest tag: $latestTag. Bumping to $newVersion"
-
-            $raw = Get-Content "src/spkup/__init__.py" -Raw -Encoding UTF8
-            $raw = $raw -replace '__version__\s*=\s*["'']\d+\.\d+\.\d+["'']', "__version__ = `"$newVersion`""
-            Set-Content -Path "src/spkup/__init__.py" -Value $raw -Encoding UTF8 -NoNewline
-
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add src/spkup/__init__.py
-            git commit -m "chore: bump version to $newVersion [skip ci]"
-            git push origin HEAD:main
-          }
-
-          "version=$newVersion" >> $env:GITHUB_OUTPUT
-          "tag_name=v$newVersion" >> $env:GITHUB_OUTPUT
-
       - name: Install dependencies and run test suite
-        if: steps.changes.outputs.has_changes == 'true'
         shell: pwsh
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev,build,gpu]"
           python -m pytest tests/ -v
 
-      - name: Capture release date
-        id: date
-        if: steps.changes.outputs.has_changes == 'true'
-        shell: pwsh
-        run: |
-          $date = Get-Date -Format 'yyyy-MM-dd'
-          "date=$date" >> $env:GITHUB_OUTPUT
-
       - name: Build Windows artifact with PyInstaller
-        if: steps.changes.outputs.has_changes == 'true'
         shell: pwsh
         run: |
           foreach ($path in @('build', 'dist')) {
@@ -120,60 +124,154 @@ jobs:
           python -m PyInstaller --clean spkup.spec
 
       - name: Validate CUDA runtime DLLs in frozen bundle
-        if: steps.changes.outputs.has_changes == 'true'
         shell: pwsh
         run: python -m spkup.packaging_validation dist\spkup
 
-      - name: Package release archive
-        id: package
-        if: steps.changes.outputs.has_changes == 'true'
+      - name: Package Windows archive
         shell: pwsh
         run: |
-          $version = "${{ steps.version.outputs.version }}"
-          $bundleName = "spkup-$version-windows-x64"
           $distDir = Join-Path $PWD 'dist'
           $srcBundle = Join-Path $distDir 'spkup'
-
           if (-not (Test-Path $srcBundle)) {
             throw "Expected PyInstaller bundle at $srcBundle"
           }
 
-          $dstBundle = Join-Path $distDir $bundleName
+          $dstBundle = Join-Path $distDir "${{ needs.prepare-nightly.outputs.windows_bundle_name }}"
           if (Test-Path $dstBundle) {
             Remove-Item $dstBundle -Recurse -Force
           }
 
-          Rename-Item -Path $srcBundle -NewName $bundleName
+          Rename-Item -Path $srcBundle -NewName "${{ needs.prepare-nightly.outputs.windows_bundle_name }}"
 
-          $archivePath = Join-Path $distDir "$bundleName.zip"
+          $archivePath = Join-Path $distDir "${{ needs.prepare-nightly.outputs.windows_archive_name }}"
           if (Test-Path $archivePath) {
             Remove-Item $archivePath -Force
           }
 
           Compress-Archive -Path $dstBundle -DestinationPath $archivePath -CompressionLevel Optimal
-
           if (-not (Test-Path $archivePath)) {
             throw "Expected release archive at $archivePath"
           }
 
-          "archive_path=$archivePath" >> $env:GITHUB_OUTPUT
+      - name: Upload Windows nightly artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-nightly-${{ needs.prepare-nightly.outputs.version }}
+          path: dist/${{ needs.prepare-nightly.outputs.windows_archive_name }}
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
+  build-macos-arm64:
+    needs: prepare-nightly
+    if: needs.prepare-nightly.outputs.has_changes == 'true'
+    runs-on: macos-latest
+
+    env:
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          ref: main
+
+      - name: Assert Apple Silicon runner
+        shell: bash
+        run: test "$(uname -m)" = "arm64"
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies and run test suite
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev,build]"
+          python -m pytest tests/ -v
+
+      - name: Build macOS ARM64 artifact with PyInstaller
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf build dist
+          python -m PyInstaller --clean spkup-macos.spec
+
+      - name: Assert packaged executable is ARM64
+        shell: bash
+        run: file "dist/spkup.app/Contents/MacOS/spkup" | grep -q "arm64"
+
+      - name: Package macOS archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist
+          rm -rf "${{ needs.prepare-nightly.outputs.macos_bundle_name }}"
+          mkdir "${{ needs.prepare-nightly.outputs.macos_bundle_name }}"
+          cp -R spkup.app "${{ needs.prepare-nightly.outputs.macos_bundle_name }}/"
+          ditto -c -k --keepParent \
+            "${{ needs.prepare-nightly.outputs.macos_bundle_name }}" \
+            "${{ needs.prepare-nightly.outputs.macos_archive_name }}"
+          test -f "${{ needs.prepare-nightly.outputs.macos_archive_name }}"
+
+      - name: Upload macOS nightly artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: macos-arm64-nightly-${{ needs.prepare-nightly.outputs.version }}
+          path: dist/${{ needs.prepare-nightly.outputs.macos_archive_name }}
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
+  publish-nightly:
+    needs:
+      - prepare-nightly
+      - build-windows
+      - build-macos-arm64
+    if: needs.prepare-nightly.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          ref: main
+
+      - name: Download nightly artifacts
+        uses: actions/download-artifact@v7
+        with:
+          path: release-assets
+          pattern: "*-nightly-${{ needs.prepare-nightly.outputs.version }}"
+          merge-multiple: true
+
+      - name: Verify expected release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f "release-assets/${{ needs.prepare-nightly.outputs.windows_archive_name }}"
+          test -f "release-assets/${{ needs.prepare-nightly.outputs.macos_archive_name }}"
 
       - name: Create and push release tag
-        if: steps.changes.outputs.has_changes == 'true'
-        shell: pwsh
+        shell: bash
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a "${{ steps.version.outputs.tag_name }}" -m "Release ${{ steps.version.outputs.tag_name }}"
-          git push origin "${{ steps.version.outputs.tag_name }}"
+          git tag -a "${{ needs.prepare-nightly.outputs.tag_name }}" -m "Release ${{ needs.prepare-nightly.outputs.tag_name }}"
+          git push origin "${{ needs.prepare-nightly.outputs.tag_name }}"
 
       - name: Publish GitHub Release
-        if: steps.changes.outputs.has_changes == 'true'
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ steps.version.outputs.tag_name }}
-          name: "spkup v${{ steps.version.outputs.version }}"
+          tag_name: ${{ needs.prepare-nightly.outputs.tag_name }}
+          name: "spkup v${{ needs.prepare-nightly.outputs.version }}"
           prerelease: false
           generate_release_notes: true
           fail_on_unmatched_files: true
-          files: ${{ steps.package.outputs.archive_path }}
+          files: |
+            release-assets/${{ needs.prepare-nightly.outputs.windows_archive_name }}
+            release-assets/${{ needs.prepare-nightly.outputs.macos_archive_name }}
