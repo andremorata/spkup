@@ -67,6 +67,12 @@ def default_compute_type(sys_platform: str | None = None) -> str:
     return "int8"
 
 
+def ui_font_family(sys_platform: str | None = None) -> str:
+    if is_windows(sys_platform):
+        return "Segoe UI"
+    return ""
+
+
 def supports_autostart(sys_platform: str | None = None) -> bool:
     return is_windows(sys_platform)
 

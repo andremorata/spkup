@@ -31,7 +31,7 @@ from spkup.model_manager import (
     is_downloaded,
 )
 from spkup.overlay import OverlayState, _STATE_COLORS
-from spkup.platform_support import supports_playback_mute
+from spkup.platform_support import supports_playback_mute, ui_font_family
 
 
 def _detect_cuda() -> bool:
@@ -228,7 +228,7 @@ class AnimationPreviewWidget(QWidget):
                 anim.paint(p, self.rect())  # type: ignore[attr-defined]
 
         p.setPen(QColor("#ffffff"))
-        font = QFont("Segoe UI", 10, QFont.Weight.Bold)
+        font = QFont(ui_font_family(), 10, QFont.Weight.Bold)
         p.setFont(font)
         p.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, self._label)
         p.end()

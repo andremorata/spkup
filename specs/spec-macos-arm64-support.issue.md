@@ -88,6 +88,7 @@ The intended initial support contract is:
 
 **Deliverable:** Core source-run behavior works on Apple Silicon macOS.
 
+- [x] Use a platform-native Qt font fallback for overlay and settings preview text so macOS does not rely on Windows-only Segoe UI.
 - [ ] Validate PyQt6 tray/menu-bar behavior on macOS and adjust labels or activation handling if needed.
 - [ ] Validate `pynput` global hotkey behavior with macOS Accessibility/Input Monitoring permissions.
 - [ ] Validate microphone capture via `sounddevice` and document the microphone permission prompt.

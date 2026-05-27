@@ -42,3 +42,9 @@ def test_platform_capabilities_are_explicit() -> None:
     assert ps.supports_playback_mute("darwin") is False
     assert ps.requires_cuda_packaging_validation("win32") is True
     assert ps.requires_cuda_packaging_validation("darwin") is False
+
+
+def test_ui_font_family_uses_native_default_off_windows() -> None:
+    assert ps.ui_font_family("win32") == "Segoe UI"
+    assert ps.ui_font_family("darwin") == ""
+    assert ps.ui_font_family("linux") == ""

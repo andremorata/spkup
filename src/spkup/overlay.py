@@ -10,7 +10,7 @@ from PyQt6.QtCore import QEasingCurve, QPropertyAnimation, QRect, Qt, QTimer
 from PyQt6.QtGui import QColor, QFont, QPaintEvent, QPainter
 from PyQt6.QtWidgets import QApplication, QWidget
 
-from spkup.platform_support import is_macos
+from spkup.platform_support import is_macos, ui_font_family
 
 _MARGIN = 16
 _PILL_W, _PILL_H = 220, 44
@@ -258,7 +258,7 @@ class OverlayWidget(QWidget):
 
         if countdown_visual is None:
             p.setPen(QColor("#ffffff"))
-            font = QFont("Segoe UI", 10, QFont.Weight.Bold)
+            font = QFont(ui_font_family(), 10, QFont.Weight.Bold)
             p.setFont(font)
             p.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, label)
             p.end()
@@ -279,7 +279,7 @@ class OverlayWidget(QWidget):
         track_rect = QRect(10, self.height() - 6, self.width() - 20, 3)
 
         p.setPen(QColor("#ffffff"))
-        status_font = QFont("Segoe UI", 10, QFont.Weight.Bold)
+        status_font = QFont(ui_font_family(), 10, QFont.Weight.Bold)
         p.setFont(status_font)
         p.drawText(
             status_rect,
@@ -289,7 +289,7 @@ class OverlayWidget(QWidget):
 
         countdown_color = QColor("#FFF59D" if countdown_visual.urgent else "#FFFFFF")
         p.setPen(countdown_color)
-        countdown_font = QFont("Segoe UI", 13, QFont.Weight.Bold)
+        countdown_font = QFont(ui_font_family(), 13, QFont.Weight.Bold)
         p.setFont(countdown_font)
         p.drawText(
             countdown_rect,
