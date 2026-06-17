@@ -6,9 +6,17 @@ import time
 from typing import cast
 
 from PyQt6.QtCore import Qt, QRect, QRectF, QTimer, QObject, pyqtSignal
-from PyQt6.QtGui import QAction, QActionGroup, QBrush, QColor, QIcon, QPainter, QPen, QPixmap
+from PyQt6.QtGui import QAction, QActionGroup, QBrush, QColor, QCursor, QIcon, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import QApplication, QMenu, QMessageBox, QSystemTrayIcon
 
+from spkup.accessibility import (
+    is_accessibility_trusted,
+    is_input_monitoring_trusted,
+    open_accessibility_settings,
+    open_input_monitoring_settings,
+    request_accessibility_trust,
+    request_input_monitoring_trust,
+)
 from spkup.audio_devices import describe as describe_device
 from spkup.audio_devices import list_input_devices, resolve_device, spec_from_device
 from spkup.autostart import disable_autostart, enable_autostart, is_autostart_enabled
@@ -168,6 +176,17 @@ class App(QObject):
         self._tray.activated.connect(self._on_tray_activated)
 
         self._menu = QMenu()
+        # macOS-only: the global hotkey is dead until the user grants
+        # Input Monitoring. Surface a prominent, persistent entry to fix it.
+        # The tray left-click still records meanwhile, so the app stays usable.
+        self._input_monitoring_action: QAction | None = None
+        if is_macos() and not is_input_monitoring_trusted():
+            self._input_monitoring_action = self._menu.addAction(
+                "⚠ Grant Input Monitoring permission for the hotkey…"
+            )
+            assert self._input_monitoring_action is not None
+            self._input_monitoring_action.triggered.connect(self._on_open_input_monitoring)
+            self._menu.addSeparator()
         settings_action = self._menu.addAction("Settings")
         assert settings_action is not None
         settings_action.triggered.connect(self._on_settings)
@@ -197,7 +216,14 @@ class App(QObject):
         assert quit_action is not None
         quit_action.triggered.connect(QApplication.quit)
 
-        self._tray.setContextMenu(self._menu)
+        # On macOS, attaching the menu via setContextMenu makes the OS pop it
+        # up on *every* click, including the left-click we use to toggle
+        # recording. Leave the tray menu unattached there and pop it up
+        # manually on the right-click (Context) activation instead. On Windows
+        # the native behavior is already left-click = trigger, right-click =
+        # menu, so keep using setContextMenu.
+        if not is_macos():
+            self._tray.setContextMenu(self._menu)
         self._tray.show()
 
         _log.info(
@@ -210,6 +236,9 @@ class App(QObject):
             self._listener.start()
             self._listener_active = True
             _log.info("Hotkey listener active: %s", self._config.hotkey)
+
+        if self._input_monitoring_action is not None:
+            QTimer.singleShot(300, self._notify_input_monitoring_needed)
 
         QTimer.singleShot(1500, self._start_update_check_if_enabled)
 
@@ -621,7 +650,37 @@ class App(QObject):
     def _on_hotkey_recording_stopped(self) -> None:
         self._request_recording_stop("hotkey")
 
+    def _notify_input_monitoring_needed(self) -> None:
+        """Tell the user the hotkey needs Input Monitoring and surface the settings."""
+        _log.warning(
+            "Input Monitoring permission missing; global hotkey will not fire until granted"
+        )
+        # Open System Settings to Input Monitoring pane
+        request_input_monitoring_trust()
+        if QSystemTrayIcon.supportsMessages():
+            self._tray.showMessage(
+                "spkup needs Input Monitoring permission",
+                (
+                    "The global hotkey stays inactive until you allow spkup under "
+                    "System Settings → Privacy & Security → Input Monitoring, then "
+                    "restart spkup. You can still record by clicking the menu-bar icon."
+                ),
+                QSystemTrayIcon.MessageIcon.Warning,
+                8000,
+            )
+
+    def _on_open_input_monitoring(self) -> None:
+        request_input_monitoring_trust()
+        open_input_monitoring_settings()
+
     def _on_tray_activated(self, reason: QSystemTrayIcon.ActivationReason) -> None:
+        # On macOS the menu is not attached to the tray (see __init__), so a
+        # right-click only surfaces as a Context activation — pop the menu up
+        # at the cursor manually. Left-click (Trigger) toggles recording.
+        if is_macos() and reason == QSystemTrayIcon.ActivationReason.Context:
+            self._menu.popup(QCursor.pos())
+            return
+
         if reason != QSystemTrayIcon.ActivationReason.Trigger:
             return
 

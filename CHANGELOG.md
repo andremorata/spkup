@@ -6,7 +6,32 @@ and the source `__version__`.
 
 ## [Unreleased]
 
+### Added
+- macOS: spkup now detects when the **Input Monitoring** permission required by the global
+  hotkey is missing (separate from Accessibility). It opens System Settings directly to the
+  correct pane, shows a tray notification, and adds a persistent menu-bar entry that guides
+  the user. The menu-bar icon still records via left-click while the permission is pending.
+
 ### Changed
+- Sound cues refined for a more subtle, modern experience:
+  - **Start**: Short upward chirp (120ms, 300→600Hz) — replaced the long 350ms sweep
+  - **Transcribing**: Very subtle downward tone (80ms, 450→350Hz) — no longer sounds like an error
+  - **Done**: Elegant two-note chime (C5 + E5, 180ms total) — professional instead of alarm-like
+  - Overall amplitude reduced from 0.4 to 0.25 for less intrusive feedback
+
+### Fixed
+- macOS: hotkeys combining Option (Alt) or Control with a letter/digit now fire.
+  They were silently dead because macOS rewrites the typed character under those
+  modifiers (⌥P → "π"); the trigger is now matched by physical key code.
+- macOS: the Settings hotkey capture no longer drops the Control key (macOS Qt
+  reports physical Control as the Meta modifier).
+- Settings: the hotkey field now shows the currently saved hotkey on open instead
+  of grabbing focus and replacing it with the capture placeholder.
+
+### Changed
+- macOS: a left-click on the menu-bar icon now only starts/stops recording; the
+  context menu opens with a right-click (previously every click also popped the menu).
+  Windows tray behavior is unchanged.
 - Replaced the scaffold-era `specs/` roadmap machinery and the generic project-scaffold
   agent instructions with project-specific docs. Work is now tracked in GitHub Issues,
   decisions in `docs/adr/`, and history in this changelog. Documentation moved to

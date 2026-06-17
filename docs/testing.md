@@ -43,6 +43,7 @@ QT_QPA_PLATFORM=offscreen PYTHONPATH=src pytest
 | `clipboard.py` | `tests/test_clipboard.py` | `setText` called with correct string (mock `QApplication.clipboard()`) |
 | `platform_support.py` | `tests/test_platform_support.py` | Platform tags, paths, feature capabilities, and artifact names |
 | platform-sensitive imports | `tests/test_platform_imports.py` | Config, logging, model manager, autostart, updater, and playback modules import on macOS without Windows-only env/modules |
+| `accessibility.py` | `tests/test_accessibility.py` | Platform gating, trust detection via mocked `ApplicationServices`, prompt option passed, settings deep link, pyobjc-missing fallback |
 | `autostart.py` | `tests/test_autostart.py` | Enable/disable/query with mocked `winreg`; unsupported-platform behavior |
 | `playback_mute.py` | `tests/test_playback_mute.py` | Snapshot/restore behavior, already-muted path, backend failure handling, restore retry, re-entry guard |
 | `app.py` (playback-mute lifecycle) | `tests/test_app_playback_mute.py` | Begin-recording mute path, delayed-start no-op path, stop/error/cleanup restore behavior with mocked Qt-heavy dependencies |
@@ -81,6 +82,7 @@ These modules involve Qt widget painting, hardware I/O, or CUDA inference — no
 | `overlay.py` | Visual inspection: recording overlay shows a live remaining-time countdown, low-time state is clearly visible, other states still show correct colours/labels, and DONE still auto-hides |
 | `app.py` (tray) | Tray icon appears; single left-click toggles recording; right-click shows menu; **Recent transcriptions** opens the history window; Quit exits |
 | `hotkey.py` (listener) | Windows and macOS: hold hotkey emits started once; release emits stopped; no flooding. macOS requires Accessibility/Input Monitoring permission. |
+| `accessibility.py` + `app.py` (macOS onboarding) | macOS without the grant: startup raises the native Accessibility prompt, a tray notification appears, and a "Grant Accessibility permission…" menu entry opens the Accessibility settings pane; left-clicking the menu-bar icon still records. After granting and restarting, the entry/notification are gone and the hotkey fires. On Windows none of this UI appears. |
 | `recorder.py` (stream) | Windows and macOS: hold hotkey, speak, release → non-empty array shape printed to stdout. macOS requires Microphone permission. |
 | `transcriber.py` | Audio captured → text transcribed correctly in PT and EN; Windows validates CUDA path, macOS validates CPU path |
 | `settings_dialog.py` | Dialog opens; hotkey capture works; save writes to `config.json` |

@@ -26,11 +26,10 @@ def test_precomputed_cues_have_expected_shape_and_length() -> None:
     assert sound_cues.transcribing.dtype == np.float32
     assert sound_cues.done.dtype == np.float32
 
-    assert len(sound_cues.start) == int(round(0.120 * 44100)) + int(round(0.230 * 44100))
-    assert len(sound_cues.transcribing) == int(round(0.150 * 44100))
-    assert len(sound_cues.done) == int(round(0.090 * 44100)) + int(
-        round(0.120 * 44100)
-    )
+    # Updated durations: start=120ms, transcribing=80ms, done=145ms (50+15+80)
+    assert len(sound_cues.start) == int(round(0.120 * 44100))
+    assert len(sound_cues.transcribing) == int(round(0.080 * 44100))
+    assert len(sound_cues.done) == int(round(0.050 * 44100)) + int(round(0.015 * 44100)) + int(round(0.080 * 44100))
 
 
 def test_play_cue_plays_known_cue_non_blocking() -> None:

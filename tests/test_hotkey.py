@@ -34,9 +34,39 @@ def test_parse_hotkey_invalid_inputs_raise_value_error(hotkey_str):
 
 
 class _DummyKey(keyboard.KeyCode):
-    def __init__(self, *, char=None, name=None):
-        super().__init__(char=char)
+    def __init__(self, *, char=None, name=None, vk=None):
+        super().__init__(char=char, vk=vk)
         self.name = name
+
+
+def test_macos_trigger_matches_by_vk_despite_option_composition(monkeypatch, direct_invoke):
+    # On macOS, ⌥P emits the composed character "π" but the physical vk (35)
+    # is stable. The listener must still fire for an "alt+p" hotkey.
+    monkeypatch.setattr("spkup.hotkey.is_macos", lambda *a, **k: True)
+    listener = HotkeyListener("alt+p")
+    assert listener._trigger_vk == 35
+    events = []
+    listener.recording_started.connect(lambda: events.append("started"))
+
+    monkeypatch.setattr("spkup.hotkey.time.monotonic", lambda: 10.0)
+    listener._on_press(_DummyKey(name="alt", vk=0x3A))
+    listener._on_press(_DummyKey(char="π", vk=35))
+
+    assert events == ["started"]
+
+
+def test_non_macos_trigger_matches_by_char(monkeypatch, direct_invoke):
+    monkeypatch.setattr("spkup.hotkey.is_macos", lambda *a, **k: False)
+    listener = HotkeyListener("alt+p")
+    assert listener._trigger_vk is None
+    events = []
+    listener.recording_started.connect(lambda: events.append("started"))
+
+    monkeypatch.setattr("spkup.hotkey.time.monotonic", lambda: 10.0)
+    listener._on_press(_DummyKey(name="alt"))
+    listener._on_press(_DummyKey(char="p"))
+
+    assert events == ["started"]
 
 
 @pytest.fixture

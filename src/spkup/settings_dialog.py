@@ -31,7 +31,7 @@ from spkup.model_manager import (
     is_downloaded,
 )
 from spkup.overlay import OverlayState, _STATE_COLORS
-from spkup.platform_support import supports_playback_mute, ui_font_family
+from spkup.platform_support import is_macos, supports_playback_mute, ui_font_family
 
 
 def _detect_cuda() -> bool:
@@ -82,6 +82,10 @@ class HotkeyEdit(QLineEdit):
     def __init__(self, initial: str = "", parent=None) -> None:
         super().__init__(parent)
         self.setReadOnly(True)
+        # Capture only on an explicit click. Otherwise the dialog hands this
+        # field initial focus on open, which swaps the saved hotkey for the
+        # "Press hotkey…" placeholder before the user has done anything.
+        self.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
         self._current = initial
         self.setText(initial)
         self._capturing = False
@@ -119,7 +123,15 @@ class HotkeyEdit(QLineEdit):
 
         mods = a0.modifiers()
         parts: list[str] = []
-        if mods & Qt.KeyboardModifier.ControlModifier:
+        # macOS Qt swaps Control and Command: the physical Control key arrives
+        # as MetaModifier, which is what pynput reports as "ctrl" at runtime.
+        # Match that here so capturing Ctrl+… on macOS isn't silently dropped.
+        ctrl_modifier = (
+            Qt.KeyboardModifier.MetaModifier
+            if is_macos()
+            else Qt.KeyboardModifier.ControlModifier
+        )
+        if mods & ctrl_modifier:
             parts.append("ctrl")
         if mods & Qt.KeyboardModifier.ShiftModifier:
             parts.append("shift")

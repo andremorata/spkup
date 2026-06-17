@@ -8,8 +8,8 @@ import sounddevice
 _log = logging.getLogger(__name__)
 
 _SAMPLE_RATE = 44100
-_AMPLITUDE = 0.4
-_FADE_DURATION_S = 0.005
+_AMPLITUDE = 0.25  # Reduced from 0.4 for subtler cues
+_FADE_DURATION_S = 0.008  # Slightly longer fade for smoother onset
 
 START_CUE_DURATION_MS: int = 350
 
@@ -23,6 +23,19 @@ def _apply_fade_envelope(samples: np.ndarray, sample_rate: int) -> np.ndarray:
     envelope[:fade_samples] = np.linspace(0.0, 1.0, fade_samples, dtype=np.float32)
     envelope[-fade_samples:] = np.linspace(1.0, 0.0, fade_samples, dtype=np.float32)
     return np.ascontiguousarray((samples * envelope).astype(np.float32, copy=False))
+
+
+def _generate_click(
+    freq: float, duration_s: float, sample_rate: int = _SAMPLE_RATE
+) -> np.ndarray:
+    """Generate a short, punchy click with quick attack and decay."""
+    sample_count = max(1, int(round(duration_s * sample_rate)))
+    times = np.arange(sample_count, dtype=np.float64) / sample_rate
+    
+    # Sharp attack followed by exponential decay
+    envelope = np.exp(-times * 15.0)  # Fast decay
+    samples = _AMPLITUDE * np.sin(2.0 * np.pi * float(freq) * times) * envelope
+    return np.ascontiguousarray(samples.astype(np.float32, copy=False))
 
 
 def _generate_tone(
@@ -55,25 +68,32 @@ def _silence(duration_s: float, sample_rate: int = _SAMPLE_RATE) -> np.ndarray:
     return np.zeros(sample_count, dtype=np.float32)
 
 
+# Modern, subtle sound cues
+# Start: Short upward chirp (like a gentle notification)
 start = np.ascontiguousarray(
     np.concatenate(
         (
-            _generate_sweep(100.0, 1200.0, 0.350),
+            _generate_sweep(300.0, 600.0, 0.120),  # Shorter, lower frequency range
         )
     ).astype(np.float32, copy=False)
 )
+
+# Transcribing: Very subtle downward tone (neutral, not alarming)
 transcribing = np.ascontiguousarray(
     np.concatenate(
         (
-            _generate_sweep(1200.0, 100.0, 0.150),
+            _generate_sweep(450.0, 350.0, 0.080),  # Much shorter, subtle change
         )
     ).astype(np.float32, copy=False)
 )
+
+# Done: Very subtle two-note chime (barely there, professional)
 done = np.ascontiguousarray(
     np.concatenate(
         (
-            _generate_tone(880.0, 0.090),
-            _generate_tone(1108.0, 0.120),
+            _generate_tone(523.25, 0.050),  # C5 - very short
+            _silence(0.015),                 # Brief pause
+            _generate_tone(659.25, 0.080),  # E5 - slightly longer but quiet
         )
     ).astype(np.float32, copy=False)
 )

@@ -7,8 +7,24 @@ from threading import Lock
 from PyQt6.QtCore import QMetaObject, QObject, Qt, pyqtSignal, pyqtSlot
 from pynput import keyboard
 
+from spkup.platform_support import is_macos
+
 
 VALID_MODIFIERS = {"ctrl", "shift", "alt"}
+
+# macOS ANSI virtual key codes for letters and digits. On macOS, holding Option
+# or Control rewrites the produced character (⌥P → "π", ⌃P → a control char),
+# so a character-based trigger match never fires. The physical key code is
+# stable regardless of modifiers, so we match letter/digit triggers by vk there.
+# Positions are shared across US/ABNT and most Latin layouts for a–z and 0–9.
+_MACOS_ANSI_VK: dict[str, int] = {
+    "a": 0, "s": 1, "d": 2, "f": 3, "h": 4, "g": 5, "z": 6, "x": 7, "c": 8,
+    "v": 9, "b": 11, "q": 12, "w": 13, "e": 14, "r": 15, "y": 16, "t": 17,
+    "o": 31, "u": 32, "i": 34, "p": 35, "l": 37, "j": 38, "k": 40, "n": 45,
+    "m": 46,
+    "1": 18, "2": 19, "3": 20, "4": 21, "6": 22, "5": 23, "9": 25, "7": 26,
+    "8": 28, "0": 29,
+}
 MODIFIER_ALIASES = {
     "ctrl": "ctrl",
     "ctrl_l": "ctrl",
@@ -61,6 +77,9 @@ class HotkeyListener(QObject):
         modifiers, trigger = parse_hotkey(hotkey_str)
         self._modifiers = modifiers
         self._trigger = trigger
+        # On macOS, match a letter/digit trigger by physical key code so that
+        # Option/Control character composition does not break the hotkey.
+        self._trigger_vk = _MACOS_ANSI_VK.get(trigger) if is_macos() else None
         self._pressed_keys: set[str] = set()
         self._is_active = False
         self._toggle_mode = False
@@ -164,6 +183,13 @@ class HotkeyListener(QObject):
     def _normalize_key(self, key: keyboard.Key | keyboard.KeyCode | None) -> str | None:
         if key is None:
             return None
+
+        # macOS: resolve the trigger by physical key code first, so a held
+        # Option/Control modifier (which rewrites the character) still matches.
+        if self._trigger_vk is not None:
+            vk = getattr(key, "vk", None)
+            if vk is not None and vk == self._trigger_vk:
+                return self._trigger
 
         if isinstance(key, keyboard.KeyCode) and key.char:
             return key.char.lower()

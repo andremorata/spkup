@@ -13,7 +13,7 @@ spkup is a single-process desktop application for Windows 11 x64 and Apple Silic
 - **Inference:** faster-whisper (CTranslate2) — runs on a QThread worker; Windows defaults to CUDA, macOS defaults to CPU/int8
 - **GPU runtime packaging:** Windows release bundles include NVIDIA CUDA/cuDNN wheel DLLs and fail packaging validation if critical DLLs are missing
 - **Audio:** sounddevice (PortAudio) — 16 kHz mono float32, stays in memory as numpy arrays
-- **Hotkey:** pynput — background thread, marshalled to Qt main thread via QMetaObject
+- **Hotkey:** pynput — background thread, marshalled to Qt main thread via QMetaObject. On macOS the global hotkey requires the **Input Monitoring** TCC grant (Privacy & Security → Privacy → Input Monitoring); `accessibility.py` detects the missing grant and guides the user, while the tray left-click stays available as a no-permission trigger
 - **Persistence:** platform paths from `platform_support.py`
   - Windows: `%APPDATA%/spkup/config.json`, `%LOCALAPPDATA%/spkup/models`, `%LOCALAPPDATA%/spkup/updates`
   - macOS: `~/Library/Application Support/spkup/config.json`, `~/Library/Caches/spkup/models`, `~/Library/Caches/spkup/updates`
@@ -73,6 +73,7 @@ flowchart TD
 | `transcription_history_window.py` | `TranscriptionHistoryWindow` | Non-modal recent-history window; previews entries and emits copy/delete requests |
 | `playback_mute.py` | `PlaybackMuteController` | Snapshots and restores the default playback mute state around a recording session |
 | `playback_mute.py` | `WindowsPlaybackMuteBackend` | Windows-only Core Audio mute backend for the default playback endpoint via `ctypes` |
+| `accessibility.py` | functions | macOS-only Input Monitoring and Accessibility trust detection, native grant prompt, and System Settings deep links; treats other platforms as already trusted and no-ops |
 | `autostart.py` | functions | Windows-only `winreg` HKCU Run key management; unsupported platforms import safely and hide the UI control |
 | `update_checker.py` | `UpdateCheckWorker`, `select_available_update` | Non-blocking GitHub Releases lookup; semantic version comparison; platform ZIP asset selection |
 | `updater.py` | `UpdateDownloadWorker`, `launch_staged_update` | Downloads confirmed release ZIPs; automatic apply remains restricted to frozen Windows builds |

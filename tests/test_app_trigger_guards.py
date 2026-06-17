@@ -86,17 +86,39 @@ def test_tray_left_click_stops_when_recording_or_pending() -> None:
         app._request_recording_start.assert_not_called()
 
 
-def test_tray_non_trigger_activation_is_ignored() -> None:
+def test_tray_non_trigger_activation_is_ignored_off_macos() -> None:
     app = QObject.__new__(App)
     QObject.__init__(app)
     app._recording_active = False
     app._recording_start_pending = False
     app._request_recording_start = MagicMock()
     app._request_recording_stop = MagicMock()
+    app._menu = MagicMock()
 
-    app._on_tray_activated(QSystemTrayIcon.ActivationReason.Context)
-    app._on_tray_activated(QSystemTrayIcon.ActivationReason.DoubleClick)
+    with patch("spkup.app.is_macos", return_value=False):
+        app._on_tray_activated(QSystemTrayIcon.ActivationReason.Context)
+        app._on_tray_activated(QSystemTrayIcon.ActivationReason.DoubleClick)
 
+    app._request_recording_start.assert_not_called()
+    app._request_recording_stop.assert_not_called()
+    app._menu.popup.assert_not_called()
+
+
+def test_tray_right_click_pops_menu_on_macos() -> None:
+    app = QObject.__new__(App)
+    QObject.__init__(app)
+    app._recording_active = False
+    app._recording_start_pending = False
+    app._request_recording_start = MagicMock()
+    app._request_recording_stop = MagicMock()
+    app._menu = MagicMock()
+
+    with patch("spkup.app.is_macos", return_value=True):
+        app._on_tray_activated(QSystemTrayIcon.ActivationReason.Context)
+        # Other non-trigger reasons stay inert even on macOS.
+        app._on_tray_activated(QSystemTrayIcon.ActivationReason.DoubleClick)
+
+    app._menu.popup.assert_called_once()
     app._request_recording_start.assert_not_called()
     app._request_recording_stop.assert_not_called()
 

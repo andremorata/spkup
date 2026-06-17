@@ -3,7 +3,7 @@
 Push-to-talk speech-to-text for Windows and Apple Silicon macOS. Hold a hotkey or single-click the tray/menu-bar icon, speak, release or click again — transcribed text lands in your clipboard.
 
 - Global hotkey (configurable, default `Ctrl+Shift+Space`)
-- Single left-click tray icon toggle for record / stop
+- Single left-click tray icon toggle for record / stop (on macOS the context menu opens with a right-click)
 - Local Whisper inference via [faster-whisper](https://github.com/SYSTRAN/faster-whisper) — no cloud, no API key
 - Mixed Portuguese + English support (auto-detect)
 - Always-on-top overlay with live remaining-time feedback during capture plus RECORDING / TRANSCRIBING / DONE states
@@ -39,7 +39,7 @@ python3 -m venv .venv
 pip install -e ".[dev,build]"
 ```
 
-macOS requires Microphone permission for recording and Accessibility/Input Monitoring permission for global hotkey capture. The first macOS package is unsigned and non-notarized, so Gatekeeper may require manual approval.
+macOS requires Microphone permission for recording and **Input Monitoring** permission for global hotkey capture. On first launch spkup detects a missing Input Monitoring grant, opens System Settings directly to the correct pane, and adds a "Grant Input Monitoring permission…" entry to the menu-bar menu that opens the right settings pane. Grant it under **System Settings → Privacy & Security → Privacy → Input Monitoring**, then restart spkup for the hotkey to start firing. Until then you can still record by left-clicking the menu-bar icon. The first macOS package is unsigned and non-notarized, so Gatekeeper may require manual approval — and because the grant is keyed to the app's signature, an unsigned build can lose the permission across updates.
 
 Run:
 
