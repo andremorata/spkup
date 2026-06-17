@@ -204,44 +204,22 @@ Startup update check
 ## 8. Repository Layout
 
 ```text
-e:\spkup\
+spkup/
   pyproject.toml
   requirements.txt
-  run.bat
-  spkup.spec
-  spkup-macos.spec
-  src/spkup/
-    __init__.py
-    __main__.py
-    app.py
-    config.py
-    hotkey.py
-    recorder.py
-    transcriber.py
-    overlay.py
-    clipboard.py
-    model_manager.py
-    playback_mute.py
-    settings_dialog.py
-    transcription_history.py
-    transcription_history_window.py
-    autostart.py
-    update_checker.py
-    updater.py
-    logging_setup.py
-    platform_support.py
-    resources/
-      tray.png
-  tests/
-    test_config.py
-    test_hotkey.py
-    test_recorder.py
-    test_model_manager.py
-    test_clipboard.py
-    test_app_playback_mute.py
-    test_autostart.py
-    test_playback_mute.py
-    test_transcription_history.py
+  run.bat                  # Windows launch helper
+  spkup.spec               # PyInstaller spec — Windows
+  spkup-macos.spec         # PyInstaller spec — macOS ARM64
+  CHANGELOG.md
+  AGENTS.md                # contributor & agent guide (CLAUDE.md + copilot are symlinks)
+  spkup/                   # repo-root import shim for `python -m spkup`
+  src/spkup/               # application code (one module per row in §3 above)
+    resources/tray.png
+  tests/                   # pytest suite, mirrors src module names
   docs/
-  specs/
+    architecture.md
+    testing.md
+    observability.md
+    packaging-release.md
+    adr/
 ```

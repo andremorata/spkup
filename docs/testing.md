@@ -24,12 +24,10 @@ Testing effort is proportional to testability. Pure logic gets automated tests t
 | Qt event loop in tests | Not used — Qt-dependent code is tested manually |
 | Test directory | `tests/` at project root |
 
-Run tests:
+Run tests (Qt-dependent code needs the offscreen platform):
 
 ```bash
-cd e:\spkup
-.venv\Scripts\activate
-pytest
+QT_QPA_PLATFORM=offscreen PYTHONPATH=src pytest
 ```
 
 ---
@@ -111,14 +109,14 @@ These apply to every module in the "unit tests" table above:
 
 ---
 
-## 8. Acceptance Criteria by Work Item
+## 8. Definition of Done
 
-Each active spec issue lists specific acceptance criteria. In historical MVP records this may be a phase file (`specs/phaseN.issue.md`); in maintenance mode it should normally be a spec or requirement issue. A work item is `Completed (validated)` when:
+A change is done when:
 
-- All unit tests in scope pass (`pytest` exits 0)
-- Automated checks in scope have been run locally; when matching CI or release automation exists, the same checks should also pass there
-- All manual checks described in the issue pass
-- `specs/progress.status.md` is updated with evidence
+- All unit tests in scope pass (`pytest` exits 0) locally and in CI
+- The manual checks relevant to the change (§5) have been performed
+- Docs that own the changed concern are updated (see `AGENTS.md` § Keep docs in sync)
+- `CHANGELOG.md` has an entry if the change is user-visible
 
 For release-related work specifically, the minimum local release-validation baseline is:
 

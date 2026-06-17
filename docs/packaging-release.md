@@ -77,14 +77,12 @@ Current platform baselines do not yet promise:
 
 Before cutting `vX.Y.Z`:
 
-1. Confirm the working tree is ready for release and Phase 9 scope changes are intentional.
+1. Confirm the working tree is ready for release.
 2. Update `src/spkup/__init__.py` so `__version__` is the intended `X.Y.Z` release.
 3. Run local automated validation:
 
 ```bash
-cd e:\spkup
-.venv\Scripts\activate
-pytest
+QT_QPA_PLATFORM=offscreen PYTHONPATH=src pytest
 ```
 
 4. If validating a Windows frozen release candidate, confirm the CUDA runtime DLL
@@ -149,9 +147,9 @@ The local validation and version-alignment checks above still happen before tagg
 
 ---
 
-## 5. Future Automation Boundary
+## 5. Automation Boundary
 
-Later Phase 9 implementation work should preserve this contract rather than replace it:
+Future workflow changes should preserve this contract rather than replace it:
 
 - Packaging configuration should derive artifact names from `src/spkup.__version__`
 - CI should validate tests and packaging against the same version source

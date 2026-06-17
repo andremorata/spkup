@@ -21,7 +21,7 @@ Windows remains the GPU-accelerated production baseline with NVIDIA CUDA/cuDNN r
 Windows:
 
 ```bash
-cd E:\spkup
+cd path\to\spkup
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
@@ -76,18 +76,12 @@ Packaged builds check GitHub Releases on startup by default. Windows builds can 
 
 | File | Contents |
 |---|---|
-| [docs/01-architecture.md](docs/01-architecture.md) | Component diagram, signal flow, threading model, module responsibilities |
-| [docs/02-observability.md](docs/02-observability.md) | Logging config, log levels, troubleshooting |
-| [docs/03-testing.md](docs/03-testing.md) | What gets unit tests, what gets manual verification, TDD rules |
-| [docs/04-delivery-workflow.md](docs/04-delivery-workflow.md) | Maintenance workflow, definition of done, historical MVP roadmap |
-| [docs/05-ai-agent-workflow.md](docs/05-ai-agent-workflow.md) | Rules for AI agents working in this repo |
-| [docs/06-packaging-release.md](docs/06-packaging-release.md) | Versioning contract, platform artifact baselines, operator release workflow |
+| [docs/architecture.md](docs/architecture.md) | Component diagram, signal flow, threading model, module responsibilities |
+| [docs/observability.md](docs/observability.md) | Logging config, log levels, troubleshooting |
+| [docs/testing.md](docs/testing.md) | What gets unit tests, what gets manual verification, TDD rules |
+| [docs/packaging-release.md](docs/packaging-release.md) | Versioning contract, platform artifact baselines, operator release workflow |
+| [docs/adr/](docs/adr/) | Architecture decision records |
+| [AGENTS.md](AGENTS.md) | Contributor & AI-agent guide |
+| [CHANGELOG.md](CHANGELOG.md) | User-visible change history |
 
-## Delivery Specs
-
-| File | Contents |
-|---|---|
-| [specs/project.plan.md](specs/project.plan.md) | Full project plan: stack, assumptions, and the full delivery roadmap |
-| [specs/progress.status.md](specs/progress.status.md) | Current maintenance status, historical MVP baseline, and validation evidence |
-| [specs/spec-template.issue.md](specs/spec-template.issue.md) | Template for new post-MVP specs, extensions, and requirements |
-| [specs/phase1.issue.md](specs/phase1.issue.md) — [phase9](specs/phase9.issue.md) | Historical MVP phase records kept for reference; do not extend with new scope |
+Work is tracked in [GitHub Issues](https://github.com/andremorata/spkup/issues).
