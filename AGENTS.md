@@ -1,7 +1,8 @@
 # spkup — Contributor & Agent Guide
 
 > This file is the source of truth for humans and AI agents working in this repo.
-> `CLAUDE.md` and `.github/copilot-instructions.md` are symlinks to it — edit this file only.
+> `CLAUDE.md` imports it via `@AGENTS.md`; `.github/copilot-instructions.md` is a symlink
+> to it. Edit this file only.
 
 ## What spkup is
 
