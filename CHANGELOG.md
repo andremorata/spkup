@@ -13,6 +13,11 @@ and the source `__version__`.
   the user. The menu-bar icon still records via left-click while the permission is pending.
 
 ### Changed
+- New minimal overlay: a dark capsule with a waveform that follows your actual voice level,
+  a shimmer while transcribing, and a short "Copied" / "Failed" confirmation. It fades in and
+  out and shows the remaining time only in the last 10 seconds. The 12 selectable animations
+  and their Settings pickers were removed.
+- The overlay now defaults to the bottom center of the screen. Existing configs keep their position.
 - Sound cues refined for a more subtle, modern experience:
   - **Start**: Short upward chirp (120ms, 300→600Hz) — replaced the long 350ms sweep
   - **Transcribing**: Very subtle downward tone (80ms, 450→350Hz) — no longer sounds like an error

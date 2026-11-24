@@ -13,15 +13,11 @@ class AppConfig:
     model_size: str = "large-v3"
     device: str = "cuda"
     compute_type: str = "int8"
-    overlay_position: str = "bottom-right"
+    overlay_position: str = "bottom-center"
     max_recording_seconds: int = 120
     transcription_timeout_seconds: int = 300
     mute_playback_while_recording: bool = False
     model_idle_unload_minutes: int = 0
-    recording_animation: str = "equalizer_bars"
-    transcribing_animation: str = "spinning_arc"
-    done_animation: str = "checkmark_draw"
-    error_animation: str = "shake"
     input_device: dict | None = None
     check_updates_on_startup: bool = True
 

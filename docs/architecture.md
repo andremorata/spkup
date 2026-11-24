@@ -60,11 +60,11 @@ flowchart TD
 | `config.py` | `AppConfig` | Settings dataclass; JSON load/save with atomic write |
 | `platform_support.py` | functions | Platform tags, path selection, platform-specific defaults, and feature capability gates |
 | `hotkey.py` | `HotkeyListener` | pynput keyboard listener; emits `recording_started` / `recording_stopped` on Qt main thread |
-| `recorder.py` | `AudioRecorder` | sounddevice stream; accumulates float32 chunks; emits `recording_finished(np.ndarray)` |
+| `recorder.py` | `AudioRecorder` | sounddevice stream; accumulates float32 chunks; exposes the live input loudness via `level()` (0..1, dB-mapped by `rms_to_level`); emits `recording_finished(np.ndarray)` |
 | `transcriber.py` | `Transcriber` | Facade; owns `_TranscriptionWorker` lifecycle; busy guard; emits `transcription_finished(str)` |
 | `transcriber.py` | `_TranscriptionWorker` | QThread worker; lazy model load; faster-whisper inference; emits result or error |
 | `model_manager.py` | `ModelManager` | Cache dir management; `is_downloaded`; `_ModelDownloadWorker` for HuggingFace downloads |
-| `overlay.py` | `OverlayWidget` | Frameless always-on-top click-through widget; RECORDING / TRANSCRIBING / DONE states plus remaining-time feedback during active capture |
+| `overlay.py` | `OverlayWidget` | Frameless always-on-top click-through capsule. RECORDING draws a scrolling waveform from the recorder's live level and swaps the red dot for a countdown in the last 10 s; TRANSCRIBING shows a shimmer; DONE / ERROR show a glyph and label. Width morphs between states; the overlay fades in and out |
 | `clipboard.py` | `copy_to_clipboard` | `QApplication.clipboard().setText()` — Unicode-safe |
 | `app.py` | `App` | `QApplication` + `QSystemTrayIcon`; instantiates all components; wires all signals; owns tray click recording toggle, trigger suppression, and the single `_cancel_active_transcription` entry point that discards an in-progress transcription (used today by the hotkey/tray start-trigger routing during the transcribing state, and reserved for a future overlay cancel button) |
 | `settings_dialog.py` | `SettingsDialog` | Hotkey capture, model picker, device selector, overlay position, playback-mute toggle; reinitializes components on save |
@@ -158,7 +158,8 @@ Startup update check
 
 | Thread | What runs there | Communication |
 | --- | --- | --- |
-| Qt main thread | `App`, `OverlayWidget`, `AudioRecorder` callbacks, all signal slots | — |
+| Qt main thread | `App`, `OverlayWidget` (polls `AudioRecorder.level()` on a 16 ms timer while visible), all signal slots | — |
+| PortAudio callback thread | `AudioRecorder._audio_callback`: appends chunks and writes the latest level float | Plain attribute writes only; the main thread reads them. No Qt calls |
 | pynput listener thread | `HotkeyListener._on_press` / `_on_release` | `QMetaObject.invokeMethod` with `QueuedConnection` → main thread |
 | `_TranscriptionWorker` (QThread) | faster-whisper inference | `pyqtSignal` → main thread |
 | `_ModelDownloadWorker` (QThread) | HuggingFace model download | `pyqtSignal` → main thread |
@@ -180,7 +181,7 @@ Startup update check
 | `model_size` | `"large-v3"` | Any faster-whisper model name |
 | `device` | Windows: `"cuda"`; macOS: `"cpu"` | `"cuda"` or `"cpu"` |
 | `compute_type` | `"int8"` | `"float16"`, `"int8"`, or `"float32"` |
-| `overlay_position` | `"bottom-right"` | `"bottom-right"`, `"bottom-left"`, `"top-right"`, `"top-left"` |
+| `overlay_position` | `"bottom-center"` | `"bottom-center"`, `"bottom-right"`, `"bottom-left"`, `"top-center"`, `"top-right"`, `"top-left"` |
 | `max_recording_seconds` | `120` | Safety cutoff for `AudioRecorder`; also drives the live recording countdown shown in the overlay |
 | `mute_playback_while_recording` | `False` | Windows-only; hidden/disabled on macOS |
 | `check_updates_on_startup` | `True` | When enabled, startup checks GitHub Releases for a newer platform ZIP; Windows can auto-apply after confirmation, macOS is manual-update only |
@@ -198,6 +199,7 @@ Startup update check
 | 2026-04-01 | QThread for transcription | Never block the UI thread during inference |
 | 2026-04-01 | Atomic config write (temp file → rename) | Prevent corrupt config on crash during save |
 | 2026-05-20 | Confirm-before-apply startup updates | Use the existing GitHub Releases ZIP channel without silent downloads or silent installs |
+| 2026-11-24 | One voice-reactive overlay replaces the 12 selectable animations | The meter shows real input loudness, which also confirms the mic works; one design is less code and fewer settings. Old `*_animation` config keys are ignored on load |
 | 2026-05-27 | Add macOS ARM64 support without migrating Windows baseline | Platform abstractions preserve Windows paths, artifacts, CUDA validation, and auto-update apply while adding CPU-oriented Apple Silicon runtime and packaging |
 
 ---

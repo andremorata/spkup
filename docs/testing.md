@@ -50,7 +50,7 @@ QT_QPA_PLATFORM=offscreen PYTHONPATH=src pytest
 | `app.py` (tray toggle + trigger guards) | `tests/test_app_trigger_guards.py` | Tray activation reasons, shared start/stop request gating, redundant trigger suppression after cancel/error/finalize, legitimate stop while active |
 | `app.py` (manual transcription cancel) | `tests/test_app_transcription_cancel.py` | Hotkey/tray start triggers during the transcribing state route through the single `_cancel_active_transcription` entry point; canceled jobs skip clipboard/history, hide the overlay, disable retry, and arm the suppression window; `_transcribing_active` stays consistent across finished/error/timeout/auto-retry/manual-retry paths |
 | `app.py` (recording countdown) | `tests/test_app_recording_countdown.py` | Countdown start/refresh/clear lifecycle, handoff into transcribing, and recording-error cleanup |
-| `overlay.py` | `tests/test_overlay.py` | Countdown visual formatting, low-time urgency flag, progress clamping, and countdown cleanup on hide |
+| `overlay.py` | `tests/test_overlay.py` | Countdown formatting, low-time urgency flag, clamping, countdown cleanup on hide, waveform history following the level source, fade-out then hide |
 | `transcription_history.py` | `tests/test_transcription_history.py` | Add/list ordering, keep only last 5 entries, delete behavior, Unicode text, duplicate entries remain distinct |
 
 These are the checks that are suitable for repeatable automated execution. They are run locally with `pytest`, and the same class of checks should remain compatible with CI.
@@ -79,7 +79,7 @@ These modules involve Qt widget painting, hardware I/O, or CUDA inference — no
 
 | Module | Manual check |
 | --- | --- |
-| `overlay.py` | Visual inspection: recording overlay shows a live remaining-time countdown, low-time state is clearly visible, other states still show correct colours/labels, and DONE still auto-hides |
+| `overlay.py` | Visual inspection: the recording waveform rises when you speak and flattens to dots in silence; the countdown appears in amber only in the last 10 s; transcribing shimmers; DONE ("Copied") and ERROR ("Failed") auto-hide with a fade; the capsule hugs the configured corner; no stale shadow or opaque corners on macOS and Windows |
 | `app.py` (tray) | Tray icon appears; single left-click toggles recording; right-click shows menu; **Recent transcriptions** opens the history window; Quit exits |
 | `hotkey.py` (listener) | Windows and macOS: hold hotkey emits started once; release emits stopped; no flooding. macOS requires Accessibility/Input Monitoring permission. |
 | `accessibility.py` + `app.py` (macOS onboarding) | macOS without the grant: startup raises the native Accessibility prompt, a tray notification appears, and a "Grant Accessibility permission…" menu entry opens the Accessibility settings pane; left-clicking the menu-bar icon still records. After granting and restarting, the entry/notification are gone and the hotkey fires. On Windows none of this UI appears. |

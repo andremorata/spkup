@@ -6,7 +6,7 @@ Push-to-talk speech-to-text for Windows and Apple Silicon macOS. Hold a hotkey o
 - Single left-click tray icon toggle for record / stop (on macOS the context menu opens with a right-click)
 - Local Whisper inference via [faster-whisper](https://github.com/SYSTRAN/faster-whisper) — no cloud, no API key
 - Mixed Portuguese + English support (auto-detect)
-- Always-on-top overlay with live remaining-time feedback during capture plus RECORDING / TRANSCRIBING / DONE states
+- Minimal always-on-top overlay with a live waveform that follows your voice, plus transcribing / copied states
 - Lives in the system tray; zero friction
 - Startup update checks against GitHub Releases, enabled by default and confirm-before-apply
 

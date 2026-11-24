@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 from unittest.mock import MagicMock, patch
 
-from spkup.recorder import AudioRecorder
+from spkup.recorder import AudioRecorder, rms_to_level
 
 
 def test_stop_before_start_is_safe():
@@ -105,3 +105,25 @@ def test_set_max_seconds_updates_next_safety_timeout():
         recorder.start()
 
     assert recorder._timer.interval() == 45000
+
+
+def test_rms_to_level_maps_db_range_to_unit_interval():
+    assert rms_to_level(0.0) == 0.0
+    assert rms_to_level(0.001) == 0.0  # -60 dBFS: room noise stays flat
+    assert rms_to_level(1.0) == 1.0
+    assert 0.3 < rms_to_level(0.03) < 0.8  # normal speech lands mid-scale
+    assert rms_to_level(0.01) < rms_to_level(0.05)
+
+
+def test_level_tracks_callbacks_and_resets_on_stop():
+    fake_stream = MagicMock()
+    with patch("spkup.recorder.sounddevice.InputStream", return_value=fake_stream):
+        recorder = AudioRecorder()
+        recorder.start()
+        assert recorder.level() == 0.0
+
+        recorder._audio_callback(np.full((512, 1), 0.1, dtype=np.float32), 512, None, None)
+        assert recorder.level() > 0.5
+
+        recorder.stop()
+    assert recorder.level() == 0.0
