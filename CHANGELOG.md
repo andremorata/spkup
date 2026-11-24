@@ -13,6 +13,9 @@ and the source `__version__`.
   the user. The menu-bar icon still records via left-click while the permission is pending.
 
 ### Changed
+- New icons. The app now has its own icon (dark tile with voice bars) on macOS and Windows,
+  replacing the default PyInstaller one. The menu-bar/tray icon is a matching waveform glyph
+  that follows the light or dark menu bar on macOS and turns red while recording.
 - Sound cues refined for a more subtle, modern experience:
   - **Start**: Short upward chirp (120ms, 300→600Hz) — replaced the long 350ms sweep
   - **Transcribing**: Very subtle downward tone (80ms, 450→350Hz) — no longer sounds like an error

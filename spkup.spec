@@ -98,6 +98,7 @@ exe = EXE(
     console=False,
     disable_windowed_traceback=False,
     exclude_binaries=True,
+    icon=str(src_root / "spkup" / "resources" / "spkup.ico"),
 )
 
 coll = COLLECT(
