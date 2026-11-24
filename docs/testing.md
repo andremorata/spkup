@@ -80,7 +80,7 @@ These modules involve Qt widget painting, hardware I/O, or CUDA inference — no
 | Module | Manual check |
 | --- | --- |
 | `overlay.py` | Visual inspection: the recording waveform rises when you speak and flattens to dots in silence; the countdown appears in amber only in the last 10 s; transcribing shimmers; DONE ("Copied") and ERROR ("Failed") auto-hide with a fade; the capsule hugs the configured corner; no stale shadow or opaque corners on macOS and Windows |
-| `app.py` (tray) | Tray icon appears; single left-click toggles recording; right-click shows menu; **Recent transcriptions** opens the history window; Quit exits |
+| `app.py` (tray) | Tray icon appears as the waveform glyph (on macOS dark on a light menu bar and light on a dark one; red while recording); the packaged app shows the spkup app icon in Finder/Explorer; single left-click toggles recording; right-click shows menu; **Recent transcriptions** opens the history window; Quit exits |
 | `hotkey.py` (listener) | Windows and macOS: hold hotkey emits started once; release emits stopped; no flooding. macOS requires Accessibility/Input Monitoring permission. |
 | `accessibility.py` + `app.py` (macOS onboarding) | macOS without the grant: startup raises the native Accessibility prompt, a tray notification appears, and a "Grant Accessibility permission…" menu entry opens the Accessibility settings pane; left-clicking the menu-bar icon still records. After granting and restarting, the entry/notification are gone and the hotkey fires. On Windows none of this UI appears. |
 | `recorder.py` (stream) | Windows and macOS: hold hotkey, speak, release → non-empty array shape printed to stdout. macOS requires Microphone permission. |

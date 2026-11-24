@@ -91,6 +91,7 @@ coll = COLLECT(
 app = BUNDLE(
     coll,
     name="spkup.app",
+    icon=str(src_root / "spkup" / "resources" / "spkup.icns"),
     bundle_identifier="dev.andremorata.spkup",
     info_plist={
         "CFBundleName": "spkup",

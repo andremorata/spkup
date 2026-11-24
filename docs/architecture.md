@@ -218,7 +218,8 @@ spkup/
   AGENTS.md                # contributor & agent guide (CLAUDE.md + copilot are symlinks)
   spkup/                   # repo-root import shim for `python -m spkup`
   src/spkup/               # application code (one module per row in §3 above)
-    resources/tray.png
+    resources/             # icon.png (window), spkup.icns (macOS bundle), spkup.ico (Windows exe)
+  scripts/make_icons.py    # regenerates the app icon assets
   tests/                   # pytest suite, mirrors src module names
   docs/
     architecture.md

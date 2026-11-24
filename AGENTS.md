@@ -25,6 +25,7 @@ Read it before any structural change.
 src/spkup/        # application code (see docs/architecture.md for the module map)
 spkup/            # repo-root import shim so `python -m spkup` resolves the local checkout
 tests/            # pytest suite (mirrors src module names)
+scripts/          # dev tools (make_icons.py regenerates the app icon assets)
 docs/             # architecture, testing, observability, packaging-release
 spkup.spec        # PyInstaller spec — Windows
 spkup-macos.spec  # PyInstaller spec — macOS ARM64
