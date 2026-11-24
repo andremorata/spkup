@@ -48,3 +48,11 @@ def test_ui_font_family_uses_native_default_off_windows() -> None:
     assert ps.ui_font_family("win32") == "Segoe UI"
     assert ps.ui_font_family("darwin") == ""
     assert ps.ui_font_family("linux") == ""
+
+
+def test_mlx_engine_and_default_model_follow_apple_silicon() -> None:
+    assert ps.uses_mlx_engine("darwin", "arm64") is True
+    assert ps.uses_mlx_engine("darwin", "x86_64") is False
+    assert ps.uses_mlx_engine("win32", "amd64") is False
+    assert ps.default_model_size("darwin", "arm64") == "large-v3-turbo"
+    assert ps.default_model_size("win32", "amd64") == "large-v3"

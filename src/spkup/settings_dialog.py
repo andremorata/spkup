@@ -31,7 +31,7 @@ from spkup.model_manager import (
     is_downloaded,
 )
 from spkup.overlay import OverlayState, _STATE_COLORS
-from spkup.platform_support import is_macos, supports_playback_mute, ui_font_family
+from spkup.platform_support import is_macos, supports_playback_mute, uses_mlx_engine, ui_font_family
 
 
 def _detect_cuda() -> bool:
@@ -156,7 +156,7 @@ class HotkeyEdit(QLineEdit):
             self.setStyleSheet("border: 1.5px solid #E53935;")
 
 
-_MODELS = ["tiny", "base", "small", "medium", "large-v2", "large-v3"]
+_MODELS = ["tiny", "base", "small", "medium", "large-v2", "large-v3", "large-v3-turbo"]
 
 _PILL_W, _PILL_H = 160, 44
 _CORNER_RADIUS = 6
@@ -354,7 +354,8 @@ class SettingsDialog(QDialog):
         gen_layout.addWidget(self._mic_combo)
 
         # ── Device ───────────────────────────────────────────────────────────
-        gen_layout.addWidget(QLabel("Device"))
+        device_label = QLabel("Device")
+        gen_layout.addWidget(device_label)
         self._device_combo = QComboBox()
         self._device_combo.addItems(["cuda", "cpu"])
         has_cuda = _detect_cuda()
@@ -374,7 +375,8 @@ class SettingsDialog(QDialog):
         gen_layout.addWidget(self._device_combo)
 
         # ── Compute type ─────────────────────────────────────────────────────
-        gen_layout.addWidget(QLabel("Compute type"))
+        compute_label = QLabel("Compute type")
+        gen_layout.addWidget(compute_label)
         self._compute_combo = QComboBox()
         self._compute_combo.addItems(["float16", "int8", "float32"])
         self._compute_combo.setCurrentText(config.compute_type)
@@ -382,6 +384,11 @@ class SettingsDialog(QDialog):
             lambda v: setattr(self._config, "compute_type", v)
         )
         gen_layout.addWidget(self._compute_combo)
+
+        # MLX always runs on the Apple GPU; device and compute type do not apply.
+        if uses_mlx_engine():
+            for widget in (device_label, self._device_combo, compute_label, self._compute_combo):
+                widget.setVisible(False)
 
         # ── Playback ──────────────────────────────────────────────────────────
         self._mute_playback_checkbox = QCheckBox("Mute playback while recording")

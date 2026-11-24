@@ -10,13 +10,13 @@ spkup is a single-process desktop application for Windows 11 x64 and Apple Silic
 
 - **Runtime:** Python 3.12, single process
 - **GUI framework:** PyQt6 — tray icon, overlay widget, settings dialog, clipboard
-- **Inference:** faster-whisper (CTranslate2) — runs on a QThread worker; Windows defaults to CUDA, macOS defaults to CPU/int8
+- **Inference:** runs on a QThread worker. Windows uses faster-whisper (CTranslate2) on CUDA. Apple Silicon uses mlx-whisper on the GPU, with faster-whisper's Silero VAD trimming silence first (`platform_support.uses_mlx_engine`)
 - **GPU runtime packaging:** Windows release bundles include NVIDIA CUDA/cuDNN wheel DLLs and fail packaging validation if critical DLLs are missing
 - **Audio:** sounddevice (PortAudio) — 16 kHz mono float32, stays in memory as numpy arrays
 - **Hotkey:** pynput — background thread, marshalled to Qt main thread via QMetaObject. On macOS the global hotkey requires the **Input Monitoring** TCC grant (Privacy & Security → Privacy → Input Monitoring); `accessibility.py` detects the missing grant and guides the user, while the tray left-click stays available as a no-permission trigger
 - **Persistence:** platform paths from `platform_support.py`
   - Windows: `%APPDATA%/spkup/config.json`, `%LOCALAPPDATA%/spkup/models`, `%LOCALAPPDATA%/spkup/updates`
-  - macOS: `~/Library/Application Support/spkup/config.json`, `~/Library/Caches/spkup/models`, `~/Library/Caches/spkup/updates`
+  - macOS: `~/Library/Application Support/spkup/config.json`, `~/Library/Caches/spkup/models` (MLX weights under `mlx-<size>/`), `~/Library/Caches/spkup/updates`
 - **Logging:** Windows writes `%LOCALAPPDATA%/spkup/spkup.log`; macOS writes `~/Library/Logs/spkup/spkup.log`
 
 ---
@@ -62,8 +62,8 @@ flowchart TD
 | `hotkey.py` | `HotkeyListener` | pynput keyboard listener; emits `recording_started` / `recording_stopped` on Qt main thread |
 | `recorder.py` | `AudioRecorder` | sounddevice stream; accumulates float32 chunks; emits `recording_finished(np.ndarray)` |
 | `transcriber.py` | `Transcriber` | Facade; owns `_TranscriptionWorker` lifecycle; busy guard; emits `transcription_finished(str)` |
-| `transcriber.py` | `_TranscriptionWorker` | QThread worker; lazy model load; faster-whisper inference; emits result or error |
-| `model_manager.py` | `ModelManager` | Cache dir management; `is_downloaded`; `_ModelDownloadWorker` for HuggingFace downloads |
+| `transcriber.py` | `_TranscriptionWorker` | QThread worker; lazy model load; faster-whisper inference, or VAD + mlx-whisper on Apple Silicon; emits result or error |
+| `model_manager.py` | `ModelManager` | Cache dir management; `is_downloaded`; `repo_id` picks the CTranslate2 or MLX repo for the platform engine; `_ModelDownloadWorker` for HuggingFace downloads |
 | `overlay.py` | `OverlayWidget` | Frameless always-on-top click-through widget; RECORDING / TRANSCRIBING / DONE states plus remaining-time feedback during active capture |
 | `clipboard.py` | `copy_to_clipboard` | `QApplication.clipboard().setText()` — Unicode-safe |
 | `app.py` | `App` | `QApplication` + `QSystemTrayIcon`; instantiates all components; wires all signals; owns tray click recording toggle, trigger suppression, and the single `_cancel_active_transcription` entry point that discards an in-progress transcription (used today by the hotkey/tray start-trigger routing during the transcribing state, and reserved for a future overlay cancel button) |
@@ -177,8 +177,8 @@ Startup update check
 | Field | Default | Notes |
 | --- | --- | --- |
 | `hotkey` | `"ctrl+shift+space"` | Parsed by `parse_hotkey()` in `hotkey.py` |
-| `model_size` | `"large-v3"` | Any faster-whisper model name |
-| `device` | Windows: `"cuda"`; macOS: `"cpu"` | `"cuda"` or `"cpu"` |
+| `model_size` | Windows: `"large-v3"`; Apple Silicon: `"large-v3-turbo"` | `tiny` … `large-v3`, `large-v3-turbo` |
+| `device` | Windows: `"cuda"`; macOS: `"cpu"` | `"cuda"` or `"cpu"`; ignored on Apple Silicon (MLX always uses the GPU), and hidden in Settings there along with `compute_type` |
 | `compute_type` | `"int8"` | `"float16"`, `"int8"`, or `"float32"` |
 | `overlay_position` | `"bottom-right"` | `"bottom-right"`, `"bottom-left"`, `"top-right"`, `"top-left"` |
 | `max_recording_seconds` | `120` | Safety cutoff for `AudioRecorder`; also drives the live recording countdown shown in the overlay |
@@ -198,6 +198,7 @@ Startup update check
 | 2026-04-01 | QThread for transcription | Never block the UI thread during inference |
 | 2026-04-01 | Atomic config write (temp file → rename) | Prevent corrupt config on crash during save |
 | 2026-05-20 | Confirm-before-apply startup updates | Use the existing GitHub Releases ZIP channel without silent downloads or silent installs |
+| 2026-11-24 | mlx-whisper on Apple Silicon, large-v3-turbo default there | Measured on an M5 Max: 0.27 s vs 14.1 s (faster-whisper CPU) for 25 s of PT+EN speech. MLX large-v3 translated the English parts into Portuguese; turbo kept both languages. Windows engine and default unchanged |
 | 2026-05-27 | Add macOS ARM64 support without migrating Windows baseline | Platform abstractions preserve Windows paths, artifacts, CUDA validation, and auto-update apply while adding CPU-oriented Apple Silicon runtime and packaging |
 
 ---

@@ -4,7 +4,7 @@ Push-to-talk speech-to-text for Windows and Apple Silicon macOS. Hold a hotkey o
 
 - Global hotkey (configurable, default `Ctrl+Shift+Space`)
 - Single left-click tray icon toggle for record / stop (on macOS the context menu opens with a right-click)
-- Local Whisper inference via [faster-whisper](https://github.com/SYSTRAN/faster-whisper) — no cloud, no API key
+- Local Whisper inference: [faster-whisper](https://github.com/SYSTRAN/faster-whisper) on Windows, [mlx-whisper](https://github.com/ml-explore/mlx-examples/tree/main/whisper) on the Apple Silicon GPU. No cloud, no API key
 - Mixed Portuguese + English support (auto-detect)
 - Always-on-top overlay with live remaining-time feedback during capture plus RECORDING / TRANSCRIBING / DONE states
 - Lives in the system tray; zero friction
@@ -12,7 +12,7 @@ Push-to-talk speech-to-text for Windows and Apple Silicon macOS. Hold a hotkey o
 
 **Supported platforms:** Windows 11 x64 and macOS ARM64 / Apple Silicon, Python 3.12.
 
-Windows remains the GPU-accelerated production baseline with NVIDIA CUDA/cuDNN runtime packaging. macOS support is CPU-oriented in the first ARM64 slice.
+Windows runs on NVIDIA GPUs with bundled CUDA/cuDNN. Apple Silicon runs on the Mac GPU through MLX and defaults to the `large-v3-turbo` model.
 
 ---
 
