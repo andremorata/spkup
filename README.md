@@ -49,6 +49,17 @@ python -m spkup
 run.bat
 ```
 
+Build and install the packaged app from your checkout:
+
+```bash
+scripts/build-macos.sh                                            # macOS → /Applications/spkup.app
+powershell -ExecutionPolicy Bypass -File scripts\build-windows.ps1  # Windows → %LOCALAPPDATA%\Programs\spkup
+```
+
+Both scripts create `.venv` if needed, build with PyInstaller, quit a running spkup, and replace
+the installed copy. Set `SPKUP_INSTALL_DIR` to install somewhere else. The Windows script also
+validates the bundled CUDA DLLs and adds a Start Menu shortcut.
+
 From the repository root, `python -m spkup` now resolves the current checkout's
 `src\spkup` code even if you also have an editable install from another clone or
 worktree.
