@@ -6,6 +6,7 @@ from pathlib import Path
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from spkup.platform_support import model_cache_dir as platform_model_cache_dir
+from spkup.platform_support import uses_mlx_engine
 
 
 # Approximate on-disk sizes for the CT2-converted Systran faster-whisper
@@ -19,7 +20,19 @@ MODEL_APPROX_SIZES_MB: dict[str, int] = {
     "medium": 1500,
     "large-v2": 3000,
     "large-v3": 3000,
+    "large-v3-turbo": 1600,
 }
+
+
+def repo_id(model_size: str) -> str:
+    """Return the Hugging Face repo holding *model_size* for this platform's engine."""
+    if uses_mlx_engine():
+        if model_size == "large-v3-turbo":
+            return "mlx-community/whisper-large-v3-turbo"
+        return f"mlx-community/whisper-{model_size}-mlx"
+    if model_size == "large-v3-turbo":
+        return "mobiuslabsgmbh/faster-whisper-large-v3-turbo"
+    return f"Systran/faster-whisper-{model_size}"
 
 
 def format_model_size(model_size: str) -> str:
@@ -48,7 +61,10 @@ def model_cache_dir() -> Path:
 
 def model_path(model_size: str) -> Path:
     """Return the expected local directory for the given model size."""
-    return model_cache_dir() / model_size
+    # Earlier macOS builds stored CTranslate2 weights under the bare name; MLX
+    # weights get their own directory so those are never loaded by the wrong engine.
+    name = f"mlx-{model_size}" if uses_mlx_engine() else model_size
+    return model_cache_dir() / name
 
 
 def is_downloaded(model_size: str) -> bool:
@@ -92,7 +108,7 @@ def delete_model(model_size: str) -> bool:
 
 
 class _ModelDownloadWorker(QThread):
-    """Downloads a faster-whisper model to the local cache in a background thread."""
+    """Downloads a Whisper model for this platform's engine in a background thread."""
 
     progress = pyqtSignal(int)   # 0–100
     finished = pyqtSignal()
@@ -120,21 +136,21 @@ class _ModelDownloadWorker(QThread):
             except Exception:
                 pass
 
-            repo_id = f"Systran/faster-whisper-{self._model_size}"
+            repo = repo_id(self._model_size)
 
             # Download file-by-file so we can report real progress to the UI.
             # snapshot_download does not expose per-file callbacks, and with
             # tqdm disabled the built-in progress bar is unavailable.
             try:
                 api = huggingface_hub.HfApi()
-                files = list(api.list_repo_files(repo_id=repo_id))
+                files = list(api.list_repo_files(repo_id=repo))
             except Exception:
                 files = []
 
             if not files:
                 # Fall back to snapshot_download if listing the repo fails.
                 huggingface_hub.snapshot_download(
-                    repo_id=repo_id,
+                    repo_id=repo,
                     local_dir=str(target),
                 )
                 self.progress.emit(100)
@@ -146,7 +162,7 @@ class _ModelDownloadWorker(QThread):
             self.progress.emit(5)
             for idx, filename in enumerate(files, start=1):
                 huggingface_hub.hf_hub_download(
-                    repo_id=repo_id,
+                    repo_id=repo,
                     filename=filename,
                     local_dir=str(target),
                 )

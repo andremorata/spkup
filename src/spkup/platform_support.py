@@ -59,6 +59,22 @@ def bundle_root_name(version: str, platform_tag: str | None = None) -> str | Non
     return f"{APP_NAME}-{version}-{tag}"
 
 
+def uses_mlx_engine(
+    sys_platform: str | None = None,
+    machine: str | None = None,
+) -> bool:
+    """Apple Silicon transcribes with mlx-whisper on the GPU instead of faster-whisper."""
+    return is_macos_arm64(sys_platform, machine)
+
+
+def default_model_size(
+    sys_platform: str | None = None,
+    machine: str | None = None,
+) -> str:
+    # MLX large-v3 locked onto one language and translated mixed PT/EN speech; turbo did not.
+    return "large-v3-turbo" if uses_mlx_engine(sys_platform, machine) else "large-v3"
+
+
 def default_device(sys_platform: str | None = None) -> str:
     return "cuda" if is_windows(sys_platform) else "cpu"
 

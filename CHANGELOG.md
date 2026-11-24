@@ -7,6 +7,12 @@ and the source `__version__`.
 ## [Unreleased]
 
 ### Added
+- Apple Silicon: transcription now runs on the Mac GPU through MLX. On an M5 Max, 25 s of speech
+  transcribes in about 0.3 s, down from 14 s. New Mac installs default to the `large-v3-turbo`
+  model. Existing Mac users must download a model again from Settings (MLX uses a different
+  format), and `large-v3-turbo` is the recommended pick. The old files in
+  `~/Library/Caches/spkup/models/<size>` can be deleted.
+- `large-v3-turbo` is available in the model list on all platforms.
 - macOS: spkup now detects when the **Input Monitoring** permission required by the global
   hotkey is missing (separate from Accessibility). It opens System Settings directly to the
   correct pane, shows a tray notification, and adds a persistent menu-bar entry that guides

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 import threading
 import time
 
@@ -9,6 +10,7 @@ from PyQt6.QtCore import QObject, QThread, QTimer, pyqtSignal
 
 from spkup.config import AppConfig
 from spkup.model_manager import ModelNotFoundError, is_downloaded, model_path
+from spkup.platform_support import uses_mlx_engine
 
 _log = logging.getLogger(__name__)
 
@@ -36,6 +38,14 @@ def unload_cached_model() -> None:
     """Remove all cached model instances so RAM can be reclaimed."""
     with _model_cache_lock:
         _model_cache.clear()
+    # mlx-whisper keeps its own single-model holder; only touch it if it was loaded.
+    mlx_transcribe = sys.modules.get("mlx_whisper.transcribe")
+    if mlx_transcribe is not None:
+        mlx_transcribe.ModelHolder.model = None
+        mlx_transcribe.ModelHolder.model_path = None
+        import mlx.core as mx
+
+        mx.clear_cache()
     _log.info("Whisper model unloaded from cache")
 
 
@@ -60,7 +70,10 @@ def _should_fallback_to_cpu(device: str, exc: Exception) -> bool:
 
 
 class _TranscriptionWorker(QThread):
-    """Transcribes a float32 audio array in a background thread via faster-whisper."""
+    """Transcribes a float32 audio array in a background thread.
+
+    Uses mlx-whisper on Apple Silicon and faster-whisper everywhere else.
+    """
 
     finished = pyqtSignal(str)
     error = pyqtSignal(str)
@@ -92,6 +105,9 @@ class _TranscriptionWorker(QThread):
                 f"Model '{self._model_size}' is not downloaded. "
                 "Open Settings to download it."
             )
+
+        if uses_mlx_engine():
+            return self._transcribe_mlx(str(model_path(self._model_size)))
 
         from faster_whisper import WhisperModel
 
@@ -150,6 +166,30 @@ class _TranscriptionWorker(QThread):
         _log.info("Model loaded in %.1f s", time.monotonic() - model_load_started)
         _set_cached_model(cache_key, model)
         return self._transcribe_with(model)
+
+    def _transcribe_mlx(self, model_path_str: str) -> str:
+        import mlx_whisper
+        from faster_whisper.vad import collect_chunks, get_speech_timestamps
+
+        _log.info(
+            "Transcription starting: %.1f s audio, engine=mlx, model=%s",
+            len(self._audio) / 16000.0,
+            self._model_size,
+        )
+        started = time.monotonic()
+        # mlx-whisper has no VAD. Reuse faster-whisper's Silero VAD, as vad_filter=True
+        # does on the other path, so silence is dropped instead of hallucinated into text.
+        chunks, _ = collect_chunks(self._audio, get_speech_timestamps(self._audio))
+        speech = np.concatenate(chunks) if chunks else np.array([], dtype=np.float32)
+        if speech.size == 0:
+            _log.info("VAD found no speech")
+            return ""
+        result = mlx_whisper.transcribe(
+            speech, path_or_hf_repo=model_path_str, language=None
+        )
+        text = str(result["text"]).strip()
+        _log.info("Inference completed in %.2f s", time.monotonic() - started)
+        return text
 
     def _transcribe_with(self, model) -> str:
         _log.debug("Inference starting...")

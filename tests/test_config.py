@@ -51,7 +51,7 @@ def test_unknown_keys_ignored(tmp_path, monkeypatch):
     result = load()
 
     assert result.hotkey == "f9"
-    assert result.model_size == "large-v3"  # default preserved
+    assert result.model_size == default_config().model_size  # default preserved
     assert result.mute_playback_while_recording is False
     assert result.check_updates_on_startup is True
 

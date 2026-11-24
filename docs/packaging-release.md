@@ -59,7 +59,8 @@ The macOS ARM64 release artifact is additive and does not replace the Windows ba
 - Expanded app folder: `spkup-X.Y.Z-macos-arm64/`
 - Primary app inside the folder: `spkup.app`
 - Primary executable inside the app: `spkup.app/Contents/MacOS/spkup`
-- Runtime default: CPU/int8 faster-whisper
+- Runtime default: mlx-whisper `large-v3-turbo` on the Apple GPU
+- The spec bundles `mlx` (including `mlx.metallib`), `mlx_whisper`, and scipy's vendored array-api shims, and excludes `torch`. The app folder is ~630 MB
 
 The macOS artifact must be built on an Apple Silicon runner or host and the packaged executable must report `arm64` via `file`.
 

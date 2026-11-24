@@ -4,7 +4,12 @@ import os
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
-from spkup.platform_support import default_compute_type, default_device, user_config_dir
+from spkup.platform_support import (
+    default_compute_type,
+    default_device,
+    default_model_size,
+    user_config_dir,
+)
 
 
 @dataclasses.dataclass
@@ -28,6 +33,7 @@ CONFIG_PATH = CONFIG_DIR / "config.json"
 
 def default_config() -> AppConfig:
     return AppConfig(
+        model_size=default_model_size(),
         device=default_device(),
         compute_type=default_compute_type(),
     )
