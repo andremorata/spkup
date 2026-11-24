@@ -77,6 +77,7 @@ flowchart TD
 | `autostart.py` | functions | Windows-only `winreg` HKCU Run key management; unsupported platforms import safely and hide the UI control |
 | `update_checker.py` | `UpdateCheckWorker`, `select_available_update` | Non-blocking GitHub Releases lookup; semantic version comparison; platform ZIP asset selection |
 | `updater.py` | `UpdateDownloadWorker`, `launch_staged_update` | Downloads confirmed release ZIPs; automatic apply remains restricted to frozen Windows builds |
+| `sound_cues.py` | `play_cue` | Plays the bundled `resources/sounds/*.wav` cues asynchronously via NSSound (macOS) or winsound (Windows); never opens a PortAudio stream. `scripts/make_sounds.py` regenerates the WAVs |
 | `logging_setup.py` | `configure_logging` | Rotating file handler + stderr handler |
 | `packaging_validation.py` | functions / CLI | Validates frozen PyInstaller bundles contain the CUDA/cuDNN DLLs required for GPU transcription before release upload |
 | `__main__.py` | `main` | Entry point: repair missing standard streams in windowed builds, add bundled NVIDIA DLL directories to the Windows loader path, configure logging, create `App`, call `run()` |

@@ -36,6 +36,7 @@ QT_QPA_PLATFORM=offscreen PYTHONPATH=src pytest
 
 | Module | Test file | What to test |
 | --- | --- | --- |
+| `sound_cues.py` | `tests/test_sound_cues.py` | Bundled WAVs are mono 16-bit, short and below half scale; Windows uses async `winsound` unless blocking; macOS reuses one NSSound per cue; player errors are logged, not raised |
 | `config.py` | `tests/test_config.py` | Load defaults, round-trip save/load, unknown keys ignored, missing file creates defaults |
 | `hotkey.py` (parser) | `tests/test_hotkey.py` | Valid combos, single key, modifier ordering, invalid strings raise `ValueError` |
 | `recorder.py` | `tests/test_recorder.py` | Stop before start is safe, `recording_finished` emitted, safety timer fires, dtype is float32 |
@@ -80,6 +81,7 @@ These modules involve Qt widget painting, hardware I/O, or CUDA inference — no
 | Module | Manual check |
 | --- | --- |
 | `overlay.py` | Visual inspection: the recording waveform rises when you speak and flattens to dots in silence; the countdown appears in amber only in the last 10 s; transcribing shimmers; DONE ("Copied") and ERROR ("Failed") auto-hide with a fade; the capsule hugs the configured corner; no stale shadow or opaque corners on macOS and Windows |
+| `sound_cues.py` | Start / stop / done cues are audible on speakers and Bluetooth headphones, the overlay appears without a visible pause after the start cue, and the start cue is not audible in the transcribed text |
 | `app.py` (tray) | Tray icon appears as the waveform glyph (on macOS dark on a light menu bar and light on a dark one; red while recording); the packaged app shows the spkup app icon in Finder/Explorer; single left-click toggles recording; right-click shows menu; **Recent transcriptions** opens the history window; Quit exits |
 | `hotkey.py` (listener) | Windows and macOS: hold hotkey emits started once; release emits stopped; no flooding. macOS requires Accessibility/Input Monitoring permission. |
 | `accessibility.py` + `app.py` (macOS onboarding) | macOS without the grant: startup raises the native Accessibility prompt, a tray notification appears, and a "Grant Accessibility permission…" menu entry opens the Accessibility settings pane; left-clicking the menu-bar icon still records. After granting and restarting, the entry/notification are gone and the hotkey fires. On Windows none of this UI appears. |
