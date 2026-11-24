@@ -1,126 +1,68 @@
+"""Short UI sound cues played through the native OS player.
+
+macOS uses NSSound and Windows uses winsound. Both play a bundled WAV
+asynchronously without opening an audio stream on the caller's thread.
+The previous PortAudio path (sounddevice.play) blocked the Qt main thread for
+~450 ms per cue on Bluetooth output, freezing the UI and delaying recording.
+Regenerate the WAVs with scripts/make_sounds.py.
+"""
+
 from __future__ import annotations
 
 import logging
+import time
+from pathlib import Path
 
-import numpy as np
-import sounddevice
+from spkup.platform_support import is_macos, is_windows
 
 _log = logging.getLogger(__name__)
 
-_SAMPLE_RATE = 44100
-_AMPLITUDE = 0.25  # Reduced from 0.4 for subtler cues
-_FADE_DURATION_S = 0.008  # Slightly longer fade for smoother onset
+SOUNDS_DIR = Path(__file__).with_name("resources") / "sounds"
+CUE_NAMES = ("start", "transcribing", "done")
 
-START_CUE_DURATION_MS: int = 350
-
-
-def _apply_fade_envelope(samples: np.ndarray, sample_rate: int) -> np.ndarray:
-    fade_samples = min(int(round(_FADE_DURATION_S * sample_rate)), len(samples) // 2)
-    if fade_samples <= 0:
-        return np.ascontiguousarray(samples.astype(np.float32, copy=False))
-
-    envelope = np.ones(len(samples), dtype=np.float32)
-    envelope[:fade_samples] = np.linspace(0.0, 1.0, fade_samples, dtype=np.float32)
-    envelope[-fade_samples:] = np.linspace(1.0, 0.0, fade_samples, dtype=np.float32)
-    return np.ascontiguousarray((samples * envelope).astype(np.float32, copy=False))
+# NSSound must stay referenced while it plays; reuse one instance per cue.
+_ns_sounds: dict[str, object] = {}
 
 
-def _generate_click(
-    freq: float, duration_s: float, sample_rate: int = _SAMPLE_RATE
-) -> np.ndarray:
-    """Generate a short, punchy click with quick attack and decay."""
-    sample_count = max(1, int(round(duration_s * sample_rate)))
-    times = np.arange(sample_count, dtype=np.float64) / sample_rate
-    
-    # Sharp attack followed by exponential decay
-    envelope = np.exp(-times * 15.0)  # Fast decay
-    samples = _AMPLITUDE * np.sin(2.0 * np.pi * float(freq) * times) * envelope
-    return np.ascontiguousarray(samples.astype(np.float32, copy=False))
+def cue_path(name: str) -> Path:
+    return SOUNDS_DIR / f"{name}.wav"
 
 
-def _generate_tone(
-    freq: float, duration_s: float, sample_rate: int = _SAMPLE_RATE
-) -> np.ndarray:
-    sample_count = max(1, int(round(duration_s * sample_rate)))
-    times = np.arange(sample_count, dtype=np.float64) / sample_rate
-    samples = _AMPLITUDE * np.sin(2.0 * np.pi * float(freq) * times)
-    return _apply_fade_envelope(samples, sample_rate)
+def _play_macos(name: str, blocking: bool) -> None:
+    from AppKit import NSSound
+
+    sound = _ns_sounds.get(name)
+    if sound is None:
+        sound = NSSound.alloc().initWithContentsOfFile_byReference_(str(cue_path(name)), True)
+        if sound is None:
+            raise OSError(f"could not load {cue_path(name)}")
+        _ns_sounds[name] = sound
+    sound.stop()  # restart cleanly if a quick repeat lands while it still plays
+    sound.play()
+    if blocking:
+        time.sleep(sound.duration())
 
 
-def _generate_sweep(
-    start_freq: float,
-    end_freq: float,
-    duration_s: float,
-    sample_rate: int = _SAMPLE_RATE,
-) -> np.ndarray:
-    sample_count = max(1, int(round(duration_s * sample_rate)))
-    times = np.arange(sample_count, dtype=np.float64) / sample_rate
-    sweep_rate = (float(end_freq) - float(start_freq)) / duration_s
-    phase = 2.0 * np.pi * (
-        float(start_freq) * times + 0.5 * sweep_rate * np.square(times)
-    )
-    samples = _AMPLITUDE * np.sin(phase)
-    return _apply_fade_envelope(samples, sample_rate)
+def _play_windows(name: str, blocking: bool) -> None:
+    import winsound
 
-
-def _silence(duration_s: float, sample_rate: int = _SAMPLE_RATE) -> np.ndarray:
-    sample_count = max(0, int(round(duration_s * sample_rate)))
-    return np.zeros(sample_count, dtype=np.float32)
-
-
-# Modern, subtle sound cues
-# Start: Short upward chirp (like a gentle notification)
-start = np.ascontiguousarray(
-    np.concatenate(
-        (
-            _generate_sweep(300.0, 600.0, 0.120),  # Shorter, lower frequency range
-        )
-    ).astype(np.float32, copy=False)
-)
-
-# Transcribing: Very subtle downward tone (neutral, not alarming)
-transcribing = np.ascontiguousarray(
-    np.concatenate(
-        (
-            _generate_sweep(450.0, 350.0, 0.080),  # Much shorter, subtle change
-        )
-    ).astype(np.float32, copy=False)
-)
-
-# Done: Very subtle two-note chime (barely there, professional)
-done = np.ascontiguousarray(
-    np.concatenate(
-        (
-            _generate_tone(523.25, 0.050),  # C5 - very short
-            _silence(0.015),                 # Brief pause
-            _generate_tone(659.25, 0.080),  # E5 - slightly longer but quiet
-        )
-    ).astype(np.float32, copy=False)
-)
-
-_CUES = {
-    "start": start,
-    "transcribing": transcribing,
-    "done": done,
-}
-
-try:
-    _device_info = sounddevice.query_devices(kind="output")
-    OUTPUT_LATENCY_MS: int = int(_device_info["default_low_output_latency"] * 1000)
-except Exception:
-    OUTPUT_LATENCY_MS = 50
+    flags = winsound.SND_FILENAME | winsound.SND_NODEFAULT
+    if not blocking:
+        flags |= winsound.SND_ASYNC
+    winsound.PlaySound(str(cue_path(name)), flags)
 
 
 def play_cue(name: str, blocking: bool = False) -> None:
-    cue = _CUES.get(name)
-    if cue is None:
+    if name not in CUE_NAMES:
         _log.warning("Unknown sound cue: %s", name)
         return
-
     try:
-        sounddevice.play(cue, samplerate=_SAMPLE_RATE, blocking=blocking)
-    except sounddevice.PortAudioError as exc:
-        _log.warning("Skipping sound cue '%s' due to PortAudio error: %s", name, exc)
+        if is_macos():
+            _play_macos(name, blocking)
+        elif is_windows():
+            _play_windows(name, blocking)
+    except Exception as exc:
+        _log.warning("Skipping sound cue '%s': %s", name, exc)
 
 
-__all__ = ["OUTPUT_LATENCY_MS", "START_CUE_DURATION_MS", "done", "play_cue", "start", "transcribing"]
+__all__ = ["CUE_NAMES", "cue_path", "play_cue"]

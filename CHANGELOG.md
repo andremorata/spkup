@@ -13,11 +13,11 @@ and the source `__version__`.
   the user. The menu-bar icon still records via left-click while the permission is pending.
 
 ### Changed
-- Sound cues refined for a more subtle, modern experience:
-  - **Start**: Short upward chirp (120ms, 300→600Hz) — replaced the long 350ms sweep
-  - **Transcribing**: Very subtle downward tone (80ms, 450→350Hz) — no longer sounds like an error
-  - **Done**: Elegant two-note chime (C5 + E5, 180ms total) — professional instead of alarm-like
-  - Overall amplitude reduced from 0.4 to 0.25 for less intrusive feedback
+- New sound cues: soft bell-like notes instead of raw beeps. A rising fifth when recording starts,
+  a softer falling fifth when it stops, and a short chime when the text is copied.
+- Sound cues now play through the native OS player (NSSound on macOS, winsound on Windows).
+  The old PortAudio path froze the app for about 0.45 s per cue on Bluetooth headphones, which
+  also delayed the start of recording.
 
 ### Fixed
 - macOS: hotkeys combining Option (Alt) or Control with a letter/digit now fire.

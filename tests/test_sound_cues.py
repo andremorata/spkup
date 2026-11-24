@@ -1,61 +1,58 @@
 from __future__ import annotations
 
 import logging
-from unittest.mock import patch
-
-import numpy as np
-import sounddevice
+import types
+import wave
+from unittest.mock import MagicMock, patch
 
 import spkup.sound_cues as sound_cues
 
 
-def test_generate_tone_returns_faded_float32_array() -> None:
-    tone = sound_cues._generate_tone(700.0, 0.070)
-
-    assert tone.dtype == np.float32
-    assert tone.ndim == 1
-    assert np.isclose(float(tone[0]), 0.0)
-    assert np.isclose(float(tone[-1]), 0.0)
-    assert np.max(np.abs(tone)) <= 0.4 + 1e-6
-
-
-def test_precomputed_cues_have_expected_shape_and_length() -> None:
-    assert sound_cues.START_CUE_DURATION_MS == 350
-
-    assert sound_cues.start.dtype == np.float32
-    assert sound_cues.transcribing.dtype == np.float32
-    assert sound_cues.done.dtype == np.float32
-
-    # Updated durations: start=120ms, transcribing=80ms, done=145ms (50+15+80)
-    assert len(sound_cues.start) == int(round(0.120 * 44100))
-    assert len(sound_cues.transcribing) == int(round(0.080 * 44100))
-    assert len(sound_cues.done) == int(round(0.050 * 44100)) + int(round(0.015 * 44100)) + int(round(0.080 * 44100))
-
-
-def test_play_cue_plays_known_cue_non_blocking() -> None:
-    with patch("spkup.sound_cues.sounddevice.play") as play:
-        sound_cues.play_cue("start")
-
-    play.assert_called_once_with(sound_cues.start, samplerate=44100, blocking=False)
+def test_bundled_cues_are_short_quiet_wavs() -> None:
+    for name in sound_cues.CUE_NAMES:
+        with wave.open(str(sound_cues.cue_path(name))) as w:
+            duration = w.getnframes() / w.getframerate()
+            frames = w.readframes(w.getnframes())
+        assert w.getnchannels() == 1 and w.getsampwidth() == 2
+        assert 0.1 <= duration <= 0.8, name
+        peak = max(abs(int.from_bytes(frames[i:i + 2], "little", signed=True))
+                   for i in range(0, len(frames), 2))
+        assert peak < 0.5 * 32767, name  # stays well under full scale
 
 
 def test_play_cue_logs_warning_for_unknown_name(caplog) -> None:
-    with patch("spkup.sound_cues.sounddevice.play") as play, caplog.at_level(
-        logging.WARNING
-    ):
+    with caplog.at_level(logging.WARNING):
         sound_cues.play_cue("missing")
-
-    play.assert_not_called()
     assert "Unknown sound cue: missing" in caplog.text
 
 
-def test_play_cue_swallows_portaudio_error(caplog) -> None:
-    error = sounddevice.PortAudioError("device unavailable")
+def test_windows_plays_file_async_unless_blocking(monkeypatch) -> None:
+    fake = types.SimpleNamespace(SND_FILENAME=1, SND_NODEFAULT=2, SND_ASYNC=4, PlaySound=MagicMock())
+    monkeypatch.setattr(sound_cues, "is_macos", lambda: False)
+    monkeypatch.setattr(sound_cues, "is_windows", lambda: True)
+    with patch.dict("sys.modules", {"winsound": fake}):
+        sound_cues.play_cue("start")
+        sound_cues.play_cue("done", blocking=True)
+    assert fake.PlaySound.call_args_list[0].args == (str(sound_cues.cue_path("start")), 1 | 2 | 4)
+    assert fake.PlaySound.call_args_list[1].args == (str(sound_cues.cue_path("done")), 1 | 2)
 
-    with patch(
-        "spkup.sound_cues.sounddevice.play", side_effect=error
-    ) as play, caplog.at_level(logging.WARNING):
+
+def test_macos_reuses_one_nssound_per_cue(monkeypatch) -> None:
+    sound = MagicMock()
+    ns_sound = MagicMock()
+    ns_sound.alloc.return_value.initWithContentsOfFile_byReference_.return_value = sound
+    monkeypatch.setattr(sound_cues, "is_macos", lambda: True)
+    monkeypatch.setattr(sound_cues, "_ns_sounds", {})
+    with patch.dict("sys.modules", {"AppKit": types.SimpleNamespace(NSSound=ns_sound)}):
+        sound_cues.play_cue("start")
+        sound_cues.play_cue("start")
+    assert ns_sound.alloc.call_count == 1
+    assert sound.play.call_count == 2
+
+
+def test_play_cue_swallows_player_errors(monkeypatch, caplog) -> None:
+    monkeypatch.setattr(sound_cues, "is_macos", lambda: True)
+    monkeypatch.setattr(sound_cues, "_play_macos", MagicMock(side_effect=OSError("no device")))
+    with caplog.at_level(logging.WARNING):
         sound_cues.play_cue("done")
-
-    play.assert_called_once_with(sound_cues.done, samplerate=44100, blocking=False)
-    assert "Skipping sound cue 'done' due to PortAudio error" in caplog.text
+    assert "Skipping sound cue 'done': no device" in caplog.text
