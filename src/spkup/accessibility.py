@@ -48,42 +48,24 @@ def is_input_monitoring_trusted(sys_platform: str | None = None) -> bool:
     """Return True when the process may observe global keyboard events via CGEventTap.
 
     On non-macOS platforms there is no such gate, so this is always True. On
-    macOS it checks whether the app has been granted Input Monitoring permission.
-    This uses tccutil query to check if the app bundle ID is in the allowed list.
+    macOS it asks ``CGPreflightListenEventAccess``, which answers for the
+    *responsible* app: the ``.app`` bundle when packaged, or the terminal that
+    launched ``python -m spkup`` in development.
 
-    If the check fails or pyobjc is unavailable, returns True so spkup never
+    If Quartz is unavailable or the call fails, returns True so spkup never
     nags the user about a state it cannot actually verify.
     """
     if not is_macos(sys_platform):
         return True
-
     try:
-        import subprocess
-        # Get the bundle identifier of the current process
-        try:
-            from Foundation import NSBundle
-            bundle_id = NSBundle.mainBundle().bundleIdentifier()
-        except Exception:
-            _log.warning("Could not determine bundle ID; skipping Input Monitoring check")
-            return True
-        
-        if not bundle_id:
-            _log.warning("Empty bundle ID; skipping Input Monitoring check")
-            return True
-
-        # Query TCC database for ListenEvent permission
-        result = subprocess.run(
-            ["tccutil", "info", "kTCCServiceListenEvent", bundle_id],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        # If tccutil returns 0 and output contains "authorized", it's granted
-        if result.returncode == 0 and "authorized" in result.stdout.lower():
-            return True
-        return False
+        from Quartz import CGPreflightListenEventAccess
+    except Exception:  # pragma: no cover - pyobjc Quartz ships with pynput
+        _log.warning("Quartz unavailable; skipping Input Monitoring check")
+        return True
+    try:
+        return bool(CGPreflightListenEventAccess())
     except Exception:  # pragma: no cover - defensive
-        _log.exception("Input Monitoring check failed")
+        _log.exception("CGPreflightListenEventAccess() failed")
         return True
 
 
@@ -110,19 +92,23 @@ def is_accessibility_trusted(sys_platform: str | None = None) -> bool:
 
 
 def request_input_monitoring_trust(sys_platform: str | None = None) -> bool:
-    """Surface the native Input Monitoring prompt if the grant is missing.
+    """Ask macOS for Input Monitoring and return the current trust state.
 
-    Returns the current trust state. Unlike Accessibility, macOS does not
-    provide a programmatic way to trigger the Input Monitoring grant dialog.
-    Instead, this opens System Settings directly to the correct pane.
-    No-op / always True off macOS.
+    ``CGRequestListenEventAccess`` shows the native prompt the first time and
+    adds the responsible app to the Input Monitoring list, so the user only has
+    to flip its toggle. Later calls return silently. Falls back to opening the
+    settings pane if the call is unavailable. No-op / always True off macOS.
     """
     if not is_macos(sys_platform):
         return True
-    # Cannot programmatically trigger Input Monitoring dialog
-    # Just open settings
-    open_input_monitoring_settings(sys_platform)
-    return is_input_monitoring_trusted(sys_platform)
+    try:
+        from Quartz import CGRequestListenEventAccess
+
+        return bool(CGRequestListenEventAccess())
+    except Exception:  # pragma: no cover - defensive
+        _log.exception("CGRequestListenEventAccess() failed; opening settings instead")
+        open_input_monitoring_settings(sys_platform)
+        return is_input_monitoring_trusted(sys_platform)
 
 
 def request_accessibility_trust(sys_platform: str | None = None) -> bool:
