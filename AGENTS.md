@@ -46,7 +46,8 @@ python -m spkup
 QT_QPA_PLATFORM=offscreen PYTHONPATH=src python -m pytest tests/ -q
 ```
 
-Package and release: see `docs/packaging-release.md`. The version contract is single-source:
+Build and install the packaged app locally: `scripts/build-macos.sh` or
+`scripts/build-windows.ps1`. Package and release: see `docs/packaging-release.md`. The version contract is single-source:
 `__version__` in `src/spkup/__init__.py` drives the `vX.Y.Z` git tag and the
 `spkup-X.Y.Z-{windows-x64,macos-arm64}.zip` artifact names. Don't introduce a second version source.
 

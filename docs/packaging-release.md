@@ -123,6 +123,17 @@ If any of those values differ, stop and correct the version source before taggin
 
 ---
 
+### Local build and install
+
+`scripts/build-macos.sh` and `scripts/build-windows.ps1` run the same PyInstaller steps as the
+release workflow (including the arm64 check on macOS and `spkup.packaging_validation` on
+Windows), then install the bundle for the current user: `/Applications/spkup.app` on macOS,
+`%LOCALAPPDATA%\Programs\spkup` plus a Start Menu shortcut on Windows. `SPKUP_INSTALL_DIR`
+overrides the target. They do not create release ZIPs.
+
+Local macOS builds carry a new ad-hoc signature each time, so macOS may ask for Input
+Monitoring again after a reinstall.
+
 ## 4. Cutting the Release
 
 Use the following operator workflow to prepare and publish a release:
