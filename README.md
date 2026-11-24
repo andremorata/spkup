@@ -39,7 +39,7 @@ python3 -m venv .venv
 pip install -e ".[dev,build]"
 ```
 
-macOS requires Microphone permission for recording and **Input Monitoring** permission for global hotkey capture. On first launch spkup detects a missing Input Monitoring grant, opens System Settings directly to the correct pane, and adds a "Grant Input Monitoring permission…" entry to the menu-bar menu that opens the right settings pane. Grant it under **System Settings → Privacy & Security → Privacy → Input Monitoring**, then restart spkup for the hotkey to start firing. Until then you can still record by left-clicking the menu-bar icon. The first macOS package is unsigned and non-notarized, so Gatekeeper may require manual approval — and because the grant is keyed to the app's signature, an unsigned build can lose the permission across updates.
+macOS requires Microphone permission for recording and **Input Monitoring** permission for global hotkey capture. On first launch spkup detects a missing Input Monitoring grant, shows the native macOS prompt (which also adds spkup to the Input Monitoring list), and adds a "Grant Input Monitoring permission…" entry to the menu-bar menu that opens the right settings pane. Grant it under **System Settings → Privacy & Security → Privacy → Input Monitoring**, then restart spkup for the hotkey to start firing. Until then you can still record by left-clicking the menu-bar icon. When running from source (`python -m spkup`), macOS checks the grant of the terminal app that launched it, not Python. The first macOS package is unsigned and non-notarized, so Gatekeeper may require manual approval — and because the grant is keyed to the app's signature, an unsigned build can lose the permission across updates.
 
 Run:
 

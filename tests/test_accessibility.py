@@ -4,6 +4,8 @@ import sys
 import types
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from spkup import accessibility
 
 
@@ -18,55 +20,33 @@ def test_input_monitoring_trusted_true_off_macos() -> None:
     assert accessibility.request_input_monitoring_trust("win32") is True
 
 
-def test_is_input_monitoring_trusted_returns_false_when_not_authorized() -> None:
-    """When tccutil reports not authorized, should return False."""
-    # Mock the Foundation import and subprocess call
-    with patch("spkup.accessibility.is_macos", return_value=True):
-        fake_nsbundle = MagicMock()
-        fake_nsbundle.mainBundle.return_value.bundleIdentifier.return_value = "com.example.spkup"
-        
-        with patch.dict("sys.modules", {"Foundation": MagicMock(NSBundle=fake_nsbundle)}):
-            with patch("spkup.accessibility.subprocess.run") as mock_run:
-                mock_result = MagicMock()
-                mock_result.returncode = 0
-                mock_result.stdout = "kTCCServiceListenEvent: denied"
-                mock_run.return_value = mock_result
-                
-                # Should return False when not authorized
-                result = accessibility.is_input_monitoring_trusted("darwin")
-                assert result is False
+def _fake_quartz(granted: bool) -> types.ModuleType:
+    module = types.ModuleType("Quartz")
+    module.CGPreflightListenEventAccess = lambda: granted  # type: ignore[attr-defined]
+    module.CGRequestListenEventAccess = lambda: granted  # type: ignore[attr-defined]
+    return module
 
 
-def test_is_input_monitoring_trusted_returns_true_when_authorized() -> None:
-    """When tccutil reports authorized, should return True."""
-    with patch("spkup.accessibility.is_macos", return_value=True):
-        fake_nsbundle = MagicMock()
-        fake_nsbundle.mainBundle.return_value.bundleIdentifier.return_value = "com.example.spkup"
-        
-        with patch.dict("sys.modules", {"Foundation": MagicMock(NSBundle=fake_nsbundle)}):
-            with patch("spkup.accessibility.subprocess.run") as mock_run:
-                mock_result = MagicMock()
-                mock_result.returncode = 0
-                mock_result.stdout = "kTCCServiceListenEvent: authorized"
-                mock_run.return_value = mock_result
-                
-                # Should return True when authorized
-                result = accessibility.is_input_monitoring_trusted("darwin")
-                assert result is True
+@pytest.mark.parametrize("granted", [True, False])
+def test_is_input_monitoring_trusted_reports_preflight(granted: bool) -> None:
+    with patch.dict("sys.modules", {"Quartz": _fake_quartz(granted)}):
+        assert accessibility.is_input_monitoring_trusted("darwin") is granted
 
 
 def test_is_input_monitoring_trusted_defaults_true_when_check_fails() -> None:
     """When the check fails, should default to True to avoid nagging."""
-    with patch("spkup.accessibility.subprocess.run", side_effect=Exception("fail")):
+    quartz = types.ModuleType("Quartz")
+    quartz.CGPreflightListenEventAccess = MagicMock(side_effect=RuntimeError("fail"))  # type: ignore[attr-defined]
+    with patch.dict("sys.modules", {"Quartz": quartz}):
         assert accessibility.is_input_monitoring_trusted("darwin") is True
 
 
-def test_request_input_monitoring_opens_settings_on_macos() -> None:
-    """request_input_monitoring_trust should open settings on macOS."""
-    with patch("spkup.accessibility.open_input_monitoring_settings") as mock_open:
-        with patch("spkup.accessibility.is_input_monitoring_trusted", return_value=False):
-            accessibility.request_input_monitoring_trust("darwin")
-    mock_open.assert_called_once_with("darwin")
+def test_request_input_monitoring_uses_native_prompt() -> None:
+    with patch.dict("sys.modules", {"Quartz": _fake_quartz(False)}), patch(
+        "spkup.accessibility.open_input_monitoring_settings"
+    ) as mock_open:
+        assert accessibility.request_input_monitoring_trust("darwin") is False
+    mock_open.assert_not_called()
 
 
 def test_open_input_monitoring_settings_runs_open_on_macos() -> None:

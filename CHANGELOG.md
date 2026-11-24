@@ -31,6 +31,9 @@ and the source `__version__`.
   - Overall amplitude reduced from 0.4 to 0.25 for less intrusive feedback
 
 ### Fixed
+- macOS: the Input Monitoring check always reported the permission as missing, even when it was
+  granted, because it called a `tccutil` subcommand that does not exist. It now asks macOS
+  directly, and the first prompt adds spkup to the Input Monitoring list.
 - macOS: hotkeys combining Option (Alt) or Control with a letter/digit now fire.
   They were silently dead because macOS rewrites the typed character under those
   modifiers (⌥P → "π"); the trigger is now matched by physical key code.
