@@ -20,11 +20,24 @@ function Invoke-Checked {
 
 $installDir = if ($env:SPKUP_INSTALL_DIR) { $env:SPKUP_INSTALL_DIR } else { Join-Path $env:LOCALAPPDATA 'Programs\spkup' }
 
+# The artifact is windows-x64 and the NVIDIA wheels ship no ARM64 build, so the venv
+# must be x64 Python even on Windows on ARM (where it runs under Prism emulation).
 if (-not (Test-Path '.venv\Scripts\python.exe')) {
     Write-Host '==> Creating .venv'
-    Invoke-Checked 'py' @('-3.12', '-m', 'venv', '.venv')
+    # Probe each interpreter: `py -V:3.12` also falls back to the 3.12-arm64 tag.
+    $basePy = py -0p | ForEach-Object { if ($_ -match '([A-Za-z]:\\.*python\.exe)\s*$') { $Matches[1].Trim() } } |
+        Where-Object { (& $_ -c 'import sys, sysconfig; print(sysconfig.get_platform(), sys.version_info[:2])') -eq 'win-amd64 (3, 12)' } |
+        Select-Object -First 1
+    if (-not $basePy) {
+        throw 'x64 Python 3.12 not found (see py -0p). Install the python.org "Windows installer (64-bit)" and retry.'
+    }
+    Invoke-Checked $basePy @('-m', 'venv', '.venv')
 }
 $py = (Resolve-Path '.venv\Scripts\python.exe').Path
+$venvPlatform = & $py -c 'import sysconfig; print(sysconfig.get_platform())'
+if ($venvPlatform -ne 'win-amd64') {
+    throw ".venv uses $venvPlatform Python; the build needs win-amd64. Delete .venv and rerun."
+}
 
 Write-Host '==> Installing build dependencies'
 Invoke-Checked $py @('-m', 'pip', 'install', '--quiet', '--upgrade', 'pip')

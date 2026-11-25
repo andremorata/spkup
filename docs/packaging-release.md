@@ -131,6 +131,11 @@ Windows), then install the bundle for the current user: `/Applications/spkup.app
 `%LOCALAPPDATA%\Programs\spkup` plus a Start Menu shortcut on Windows. `SPKUP_INSTALL_DIR`
 overrides the target. They do not create release ZIPs.
 
+`build-windows.ps1` builds its `.venv` from an x64 Python 3.12 found via `py -0p`, also on
+Windows on ARM, because the artifact is windows-x64 and the NVIDIA wheels have no ARM64
+build. A python.org x64 install or `uv python install cpython-3.12-windows-x86_64-none`
+both work. An existing non-x64 `.venv` stops the build; delete it and rerun.
+
 Local macOS builds carry a new ad-hoc signature each time, so macOS may ask for Input
 Monitoring again after a reinstall.
 
