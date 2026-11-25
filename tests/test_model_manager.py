@@ -15,6 +15,7 @@ from spkup.model_manager import (
     is_downloaded,
     model_cache_dir,
     model_path,
+    repo_id,
 )
 
 # A single QApplication is required for QObject/QThread instantiation.
@@ -27,6 +28,24 @@ def _isolated_model_cache(tmp_path, monkeypatch):
         "spkup.model_manager.platform_model_cache_dir",
         lambda: tmp_path / "spkup" / "models",
     )
+
+
+def test_faster_whisper_repos(monkeypatch):
+    assert repo_id("large-v3") == "Systran/faster-whisper-large-v3"
+    assert repo_id("large-v3-turbo") == "mobiuslabsgmbh/faster-whisper-large-v3-turbo"
+
+
+def test_mlx_repos_and_separate_cache_dir(tmp_path, monkeypatch):
+    monkeypatch.setattr("spkup.model_manager.uses_mlx_engine", lambda: True)
+    assert repo_id("large-v3") == "mlx-community/whisper-large-v3-mlx"
+    assert repo_id("tiny") == "mlx-community/whisper-tiny-mlx"
+    assert repo_id("large-v3-turbo") == "mlx-community/whisper-large-v3-turbo"
+    # CTranslate2 weights left by older macOS builds must not count as an MLX download.
+    ct2 = tmp_path / "spkup" / "models" / "large-v3"
+    ct2.mkdir(parents=True)
+    (ct2 / "model.bin").write_bytes(b"ct2")
+    assert model_path("large-v3") == tmp_path / "spkup" / "models" / "mlx-large-v3"
+    assert not is_downloaded("large-v3")
 
 
 def test_model_cache_dir_created(tmp_path, monkeypatch):

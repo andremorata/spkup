@@ -59,7 +59,8 @@ The macOS ARM64 release artifact is additive and does not replace the Windows ba
 - Expanded app folder: `spkup-X.Y.Z-macos-arm64/`
 - Primary app inside the folder: `spkup.app`
 - Primary executable inside the app: `spkup.app/Contents/MacOS/spkup`
-- Runtime default: CPU/int8 faster-whisper
+- Runtime default: mlx-whisper `large-v3-turbo` on the Apple GPU
+- The spec bundles `mlx` (including `mlx.metallib`), `mlx_whisper`, and scipy's vendored array-api shims, and excludes `torch`. The app folder is ~630 MB
 
 The macOS artifact must be built on an Apple Silicon runner or host and the packaged executable must report `arm64` via `file`.
 
@@ -121,6 +122,17 @@ Then wrap it as `spkup-X.Y.Z-macos-arm64.zip` with `spkup.app` inside the versio
 If any of those values differ, stop and correct the version source before tagging.
 
 ---
+
+### Local build and install
+
+`scripts/build-macos.sh` and `scripts/build-windows.ps1` run the same PyInstaller steps as the
+release workflow (including the arm64 check on macOS and `spkup.packaging_validation` on
+Windows), then install the bundle for the current user: `/Applications/spkup.app` on macOS,
+`%LOCALAPPDATA%\Programs\spkup` plus a Start Menu shortcut on Windows. `SPKUP_INSTALL_DIR`
+overrides the target. They do not create release ZIPs.
+
+Local macOS builds carry a new ad-hoc signature each time, so macOS may ask for Input
+Monitoring again after a reinstall.
 
 ## 4. Cutting the Release
 

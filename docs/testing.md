@@ -36,6 +36,7 @@ QT_QPA_PLATFORM=offscreen PYTHONPATH=src pytest
 
 | Module | Test file | What to test |
 | --- | --- | --- |
+| `sound_cues.py` | `tests/test_sound_cues.py` | Bundled WAVs are mono 16-bit, short and below half scale; Windows uses async `winsound` unless blocking; macOS reuses one NSSound per cue; player errors are logged, not raised |
 | `config.py` | `tests/test_config.py` | Load defaults, round-trip save/load, unknown keys ignored, missing file creates defaults |
 | `hotkey.py` (parser) | `tests/test_hotkey.py` | Valid combos, single key, modifier ordering, invalid strings raise `ValueError` |
 | `recorder.py` | `tests/test_recorder.py` | Stop before start is safe, `recording_finished` emitted, safety timer fires, dtype is float32 |
@@ -50,7 +51,7 @@ QT_QPA_PLATFORM=offscreen PYTHONPATH=src pytest
 | `app.py` (tray toggle + trigger guards) | `tests/test_app_trigger_guards.py` | Tray activation reasons, shared start/stop request gating, redundant trigger suppression after cancel/error/finalize, legitimate stop while active |
 | `app.py` (manual transcription cancel) | `tests/test_app_transcription_cancel.py` | Hotkey/tray start triggers during the transcribing state route through the single `_cancel_active_transcription` entry point; canceled jobs skip clipboard/history, hide the overlay, disable retry, and arm the suppression window; `_transcribing_active` stays consistent across finished/error/timeout/auto-retry/manual-retry paths |
 | `app.py` (recording countdown) | `tests/test_app_recording_countdown.py` | Countdown start/refresh/clear lifecycle, handoff into transcribing, and recording-error cleanup |
-| `overlay.py` | `tests/test_overlay.py` | Countdown visual formatting, low-time urgency flag, progress clamping, and countdown cleanup on hide |
+| `overlay.py` | `tests/test_overlay.py` | Countdown formatting, low-time urgency flag, clamping, countdown cleanup on hide, waveform history following the level source, fade-out then hide |
 | `transcription_history.py` | `tests/test_transcription_history.py` | Add/list ordering, keep only last 5 entries, delete behavior, Unicode text, duplicate entries remain distinct |
 
 These are the checks that are suitable for repeatable automated execution. They are run locally with `pytest`, and the same class of checks should remain compatible with CI.
@@ -79,12 +80,13 @@ These modules involve Qt widget painting, hardware I/O, or CUDA inference — no
 
 | Module | Manual check |
 | --- | --- |
-| `overlay.py` | Visual inspection: recording overlay shows a live remaining-time countdown, low-time state is clearly visible, other states still show correct colours/labels, and DONE still auto-hides |
-| `app.py` (tray) | Tray icon appears; single left-click toggles recording; right-click shows menu; **Recent transcriptions** opens the history window; Quit exits |
+| `overlay.py` | Visual inspection: the recording waveform rises when you speak and flattens to dots in silence; the countdown appears in amber only in the last 10 s; transcribing shimmers; DONE ("Copied") and ERROR ("Failed") auto-hide with a fade; the capsule hugs the configured corner; no stale shadow or opaque corners on macOS and Windows |
+| `sound_cues.py` | Start / stop / done cues are audible on speakers and Bluetooth headphones, the overlay appears without a visible pause after the start cue, and the start cue is not audible in the transcribed text |
+| `app.py` (tray) | Tray icon appears as the waveform glyph (on macOS dark on a light menu bar and light on a dark one; red while recording); the packaged app shows the spkup app icon in Finder/Explorer; single left-click toggles recording; right-click shows menu; **Recent transcriptions** opens the history window; Quit exits |
 | `hotkey.py` (listener) | Windows and macOS: hold hotkey emits started once; release emits stopped; no flooding. macOS requires Accessibility/Input Monitoring permission. |
 | `accessibility.py` + `app.py` (macOS onboarding) | macOS without the grant: startup raises the native Accessibility prompt, a tray notification appears, and a "Grant Accessibility permission…" menu entry opens the Accessibility settings pane; left-clicking the menu-bar icon still records. After granting and restarting, the entry/notification are gone and the hotkey fires. On Windows none of this UI appears. |
 | `recorder.py` (stream) | Windows and macOS: hold hotkey, speak, release → non-empty array shape printed to stdout. macOS requires Microphone permission. |
-| `transcriber.py` | Audio captured → text transcribed correctly in PT and EN; Windows validates CUDA path, macOS validates CPU path |
+| `transcriber.py` | Audio captured → text transcribed correctly in PT and EN, including mixed PT/EN in one recording; Windows validates CUDA path, Apple Silicon validates the MLX path (log shows `engine=mlx`) and that a silent recording yields no text |
 | `settings_dialog.py` | Dialog opens; hotkey capture works; save writes to `config.json` |
 | `playback_mute.py` + recording flow | On Windows, enabling **Mute playback while recording** mutes only during active capture, restores the exact prior mute state on stop, restores after recording error or app quit, and behaves the same for hold-to-record and quick-tap toggle flows. On macOS the control is unavailable. |
 | `transcription_history_window.py` | Window shows newest-first session entries; copy/delete act on the selected entry; close/reopen preserves session history while the app stays running |

@@ -25,6 +25,7 @@ Read it before any structural change.
 src/spkup/        # application code (see docs/architecture.md for the module map)
 spkup/            # repo-root import shim so `python -m spkup` resolves the local checkout
 tests/            # pytest suite (mirrors src module names)
+scripts/          # dev tools that regenerate bundled assets (make_icons.py, make_sounds.py)
 docs/             # architecture, testing, observability, packaging-release
 spkup.spec        # PyInstaller spec — Windows
 spkup-macos.spec  # PyInstaller spec — macOS ARM64
@@ -45,7 +46,8 @@ python -m spkup
 QT_QPA_PLATFORM=offscreen PYTHONPATH=src python -m pytest tests/ -q
 ```
 
-Package and release: see `docs/packaging-release.md`. The version contract is single-source:
+Build and install the packaged app locally: `scripts/build-macos.sh` or
+`scripts/build-windows.ps1`. Package and release: see `docs/packaging-release.md`. The version contract is single-source:
 `__version__` in `src/spkup/__init__.py` drives the `vX.Y.Z` git tag and the
 `spkup-X.Y.Z-{windows-x64,macos-arm64}.zip` artifact names. Don't introduce a second version source.
 

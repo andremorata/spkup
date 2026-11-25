@@ -15,6 +15,44 @@ from spkup.transcriber import Transcriber, _TranscriptionWorker, _should_fallbac
 _qapp: QApplication = QApplication.instance() or QApplication(sys.argv[:1])  # type: ignore[assignment]
 
 
+def test_mlx_engine_transcribes_only_the_speech_chunks(monkeypatch) -> None:
+    monkeypatch.setattr("spkup.transcriber.uses_mlx_engine", lambda: True)
+    audio = np.arange(32000, dtype=np.float32)
+    worker = _TranscriptionWorker(audio, "large-v3-turbo", "cpu", "int8")
+    calls: list[tuple[np.ndarray, str]] = []
+
+    def fake_transcribe(a, *, path_or_hf_repo, language):
+        calls.append((a, path_or_hf_repo))
+        return {"text": "  olá world  "}
+
+    fake_vad = SimpleNamespace(
+        get_speech_timestamps=lambda a: [{"start": 100, "end": 200}],
+        collect_chunks=lambda a, ts: ([a[100:200]], None),
+    )
+    with patch("spkup.transcriber.is_downloaded", return_value=True), patch(
+        "spkup.transcriber.model_path", return_value=Path("/models/mlx-large-v3-turbo")
+    ), patch.dict("sys.modules", {
+        "mlx_whisper": SimpleNamespace(transcribe=fake_transcribe),
+        "faster_whisper.vad": fake_vad,
+    }):
+        assert worker._run_transcription() == "olá world"
+
+    assert len(calls) == 1
+    assert calls[0][1] == str(Path("/models/mlx-large-v3-turbo"))
+    assert np.array_equal(calls[0][0], audio[100:200])
+
+
+def test_mlx_engine_skips_inference_when_vad_finds_no_speech(monkeypatch) -> None:
+    monkeypatch.setattr("spkup.transcriber.uses_mlx_engine", lambda: True)
+    worker = _TranscriptionWorker(np.zeros(32000, dtype=np.float32), "tiny", "cpu", "int8")
+    mlx = MagicMock()
+    with patch("spkup.transcriber.is_downloaded", return_value=True), patch.dict(
+        "sys.modules", {"mlx_whisper": mlx}
+    ):
+        assert worker._run_transcription() == ""  # real Silero VAD on silence
+    mlx.transcribe.assert_not_called()
+
+
 def test_should_fallback_to_cpu_for_missing_cuda_library() -> None:
     exc = RuntimeError("Library cublas64_12.dll is not found or cannot be loaded")
 

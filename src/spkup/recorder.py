@@ -1,12 +1,26 @@
 from __future__ import annotations
 
 import logging
+import math
 
 import numpy as np
 import sounddevice
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal
 
 _log = logging.getLogger(__name__)
+
+# Calibration for the overlay meter: quiet-room noise sits below the floor,
+# normal speech on a laptop mic lands around -35..-20 dBFS.
+_LEVEL_FLOOR_DB = -50.0
+_LEVEL_CEIL_DB = -12.0
+
+
+def rms_to_level(rms: float) -> float:
+    """Map a chunk RMS amplitude to a 0..1 loudness on a dB scale."""
+    if rms <= 0.0:
+        return 0.0
+    db = 20.0 * math.log10(rms)
+    return min(1.0, max(0.0, (db - _LEVEL_FLOOR_DB) / (_LEVEL_CEIL_DB - _LEVEL_FLOOR_DB)))
 
 
 class AudioRecorder(QObject):
@@ -19,6 +33,7 @@ class AudioRecorder(QObject):
         self._max_seconds = max_seconds
         self._chunks: list[np.ndarray] = []
         self._stream = None
+        self._level = 0.0
         self._timer = QTimer()
         self._timer.setSingleShot(True)
         self._timer.timeout.connect(self._on_safety_timeout)
@@ -41,6 +56,7 @@ class AudioRecorder(QObject):
             return
 
         self._chunks = []
+        self._level = 0.0
 
         try:
             self._stream = sounddevice.InputStream(
@@ -62,8 +78,16 @@ class AudioRecorder(QObject):
             self.recording_error.emit(str(exc))
             self._stream = None
 
+    def level(self) -> float:
+        """Latest input loudness in 0..1; safe to poll from the Qt thread."""
+        return self._level
+
     def _audio_callback(self, indata, frames, time, status):
-        self._chunks.append(indata[:, 0].copy())
+        # Runs on the PortAudio thread: plain attribute writes only, no Qt calls.
+        samples = indata[:, 0].copy()
+        self._chunks.append(samples)
+        if samples.size:
+            self._level = rms_to_level(float(np.sqrt(np.mean(np.square(samples)))))
 
     def stop(self):
         if self._stream is None:
@@ -73,6 +97,7 @@ class AudioRecorder(QObject):
         self._stream.stop()
         self._stream.close()
         self._stream = None
+        self._level = 0.0
 
         if self._chunks:
             audio = np.concatenate(self._chunks)

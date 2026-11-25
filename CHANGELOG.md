@@ -7,19 +7,36 @@ and the source `__version__`.
 ## [Unreleased]
 
 ### Added
+- Apple Silicon: transcription now runs on the Mac GPU through MLX. On an M5 Max, 25 s of speech
+  transcribes in about 0.3 s, down from 14 s. New Mac installs default to the `large-v3-turbo`
+  model. Existing Mac users must download a model again from Settings (MLX uses a different
+  format), and `large-v3-turbo` is the recommended pick. The old files in
+  `~/Library/Caches/spkup/models/<size>` can be deleted.
+- `large-v3-turbo` is available in the model list on all platforms.
 - macOS: spkup now detects when the **Input Monitoring** permission required by the global
   hotkey is missing (separate from Accessibility). It opens System Settings directly to the
   correct pane, shows a tray notification, and adds a persistent menu-bar entry that guides
   the user. The menu-bar icon still records via left-click while the permission is pending.
 
 ### Changed
-- Sound cues refined for a more subtle, modern experience:
-  - **Start**: Short upward chirp (120ms, 300→600Hz) — replaced the long 350ms sweep
-  - **Transcribing**: Very subtle downward tone (80ms, 450→350Hz) — no longer sounds like an error
-  - **Done**: Elegant two-note chime (C5 + E5, 180ms total) — professional instead of alarm-like
-  - Overall amplitude reduced from 0.4 to 0.25 for less intrusive feedback
+- New minimal overlay: a dark capsule with a waveform that follows your actual voice level,
+  a shimmer while transcribing, and a short "Copied" / "Failed" confirmation. It fades in and
+  out and shows the remaining time only in the last 10 seconds. The 12 selectable animations
+  and their Settings pickers were removed.
+- The overlay now defaults to the bottom center of the screen. Existing configs keep their position.
+- New icons. The app now has its own icon (dark tile with voice bars) on macOS and Windows,
+  replacing the default PyInstaller one. The menu-bar/tray icon is a matching waveform glyph
+  that follows the light or dark menu bar on macOS and turns red while recording.
+- New sound cues: soft bell-like notes instead of raw beeps. A rising fifth when recording starts,
+  a softer falling fifth when it stops, and a short chime when the text is copied.
+- Sound cues now play through the native OS player (NSSound on macOS, winsound on Windows).
+  The old PortAudio path froze the app for about 0.45 s per cue on Bluetooth headphones, which
+  also delayed the start of recording.
 
 ### Fixed
+- macOS: the Input Monitoring check always reported the permission as missing, even when it was
+  granted, because it called a `tccutil` subcommand that does not exist. It now asks macOS
+  directly, and the first prompt adds spkup to the Input Monitoring list.
 - macOS: hotkeys combining Option (Alt) or Control with a letter/digit now fire.
   They were silently dead because macOS rewrites the typed character under those
   modifiers (⌥P → "π"); the trigger is now matched by physical key code.

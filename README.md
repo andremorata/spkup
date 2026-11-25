@@ -4,15 +4,15 @@ Push-to-talk speech-to-text for Windows and Apple Silicon macOS. Hold a hotkey o
 
 - Global hotkey (configurable, default `Ctrl+Shift+Space`)
 - Single left-click tray icon toggle for record / stop (on macOS the context menu opens with a right-click)
-- Local Whisper inference via [faster-whisper](https://github.com/SYSTRAN/faster-whisper) — no cloud, no API key
+- Local Whisper inference: [faster-whisper](https://github.com/SYSTRAN/faster-whisper) on Windows, [mlx-whisper](https://github.com/ml-explore/mlx-examples/tree/main/whisper) on the Apple Silicon GPU. No cloud, no API key
 - Mixed Portuguese + English support (auto-detect)
-- Always-on-top overlay with live remaining-time feedback during capture plus RECORDING / TRANSCRIBING / DONE states
+- Minimal always-on-top overlay with a live waveform that follows your voice, plus transcribing / copied states
 - Lives in the system tray; zero friction
 - Startup update checks against GitHub Releases, enabled by default and confirm-before-apply
 
 **Supported platforms:** Windows 11 x64 and macOS ARM64 / Apple Silicon, Python 3.12.
 
-Windows remains the GPU-accelerated production baseline with NVIDIA CUDA/cuDNN runtime packaging. macOS support is CPU-oriented in the first ARM64 slice.
+Windows runs on NVIDIA GPUs with bundled CUDA/cuDNN. Apple Silicon runs on the Mac GPU through MLX and defaults to the `large-v3-turbo` model.
 
 ---
 
@@ -39,7 +39,7 @@ python3 -m venv .venv
 pip install -e ".[dev,build]"
 ```
 
-macOS requires Microphone permission for recording and **Input Monitoring** permission for global hotkey capture. On first launch spkup detects a missing Input Monitoring grant, opens System Settings directly to the correct pane, and adds a "Grant Input Monitoring permission…" entry to the menu-bar menu that opens the right settings pane. Grant it under **System Settings → Privacy & Security → Privacy → Input Monitoring**, then restart spkup for the hotkey to start firing. Until then you can still record by left-clicking the menu-bar icon. The first macOS package is unsigned and non-notarized, so Gatekeeper may require manual approval — and because the grant is keyed to the app's signature, an unsigned build can lose the permission across updates.
+macOS requires Microphone permission for recording and **Input Monitoring** permission for global hotkey capture. On first launch spkup detects a missing Input Monitoring grant, shows the native macOS prompt (which also adds spkup to the Input Monitoring list), and adds a "Grant Input Monitoring permission…" entry to the menu-bar menu that opens the right settings pane. Grant it under **System Settings → Privacy & Security → Privacy → Input Monitoring**, then restart spkup for the hotkey to start firing. Until then you can still record by left-clicking the menu-bar icon. When running from source (`python -m spkup`), macOS checks the grant of the terminal app that launched it, not Python. The first macOS package is unsigned and non-notarized, so Gatekeeper may require manual approval — and because the grant is keyed to the app's signature, an unsigned build can lose the permission across updates.
 
 Run:
 
@@ -48,6 +48,17 @@ python -m spkup
 # or
 run.bat
 ```
+
+Build and install the packaged app from your checkout:
+
+```bash
+scripts/build-macos.sh                                            # macOS → /Applications/spkup.app
+powershell -ExecutionPolicy Bypass -File scripts\build-windows.ps1  # Windows → %LOCALAPPDATA%\Programs\spkup
+```
+
+Both scripts create `.venv` if needed, build with PyInstaller, quit a running spkup, and replace
+the installed copy. Set `SPKUP_INSTALL_DIR` to install somewhere else. The Windows script also
+validates the bundled CUDA DLLs and adds a Start Menu shortcut.
 
 From the repository root, `python -m spkup` now resolves the current checkout's
 `src\spkup` code even if you also have an editable install from another clone or

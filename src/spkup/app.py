@@ -3,10 +3,11 @@ import logging
 import sys
 import threading
 import time
+from pathlib import Path
 from typing import cast
 
-from PyQt6.QtCore import Qt, QRect, QRectF, QTimer, QObject, pyqtSignal
-from PyQt6.QtGui import QAction, QActionGroup, QBrush, QColor, QCursor, QIcon, QPainter, QPen, QPixmap
+from PyQt6.QtCore import Qt, QRectF, QTimer, QObject, pyqtSignal
+from PyQt6.QtGui import QAction, QActionGroup, QColor, QCursor, QIcon, QPainter, QPixmap
 from PyQt6.QtWidgets import QApplication, QMenu, QMessageBox, QSystemTrayIcon
 
 from spkup.accessibility import (
@@ -50,54 +51,39 @@ RECORDING_COUNTDOWN_INTERVAL_MS = 100
 TRIGGER_SUPPRESSION_WINDOW_S = 1.0
 
 
-def _make_tray_icon(size: int = 64, color: str = "#ffffff") -> QIcon:
-    """Draw a microphone icon at the given size using QPainter."""
-    px = QPixmap(size, size)
-    px.fill(Qt.GlobalColor.transparent)
+_TRAY_BARS = (0.30, 0.58, 1.0, 0.72, 0.42)  # same silhouette as the app icon
+_RECORDING_RED = "#FF453A"
+_APP_ICON_PATH = Path(__file__).with_name("resources") / "icon.png"
 
-    p = QPainter(px)
-    p.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-    c = QColor(color)
-    p.setBrush(QBrush(c))
-    p.setPen(Qt.PenStyle.NoPen)
+def _make_tray_icon(color: str | None = None) -> QIcon:
+    """Draw the waveform glyph for the menu bar / system tray.
 
-    s = size
-    # Mic capsule body (rounded rect, upper-centre)
-    cap_w = s * 0.36
-    cap_h = s * 0.46
-    cap_x = (s - cap_w) / 2
-    cap_y = s * 0.04
-    p.drawRoundedRect(QRectF(cap_x, cap_y, cap_w, cap_h), cap_w / 2, cap_w / 2)
-
-    # Arc stand — drawn as a thick pen arc
-    pen = QPen(c)
-    pen.setWidthF(s * 0.09)
-    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-    p.setPen(pen)
-    p.setBrush(Qt.BrushStyle.NoBrush)
-    arc_margin = int(s * 0.16)
-    arc_rect = QRect(arc_margin, int(s * 0.28), s - 2 * arc_margin, s - 2 * arc_margin)
-    p.drawArc(arc_rect, 0 * 16, -180 * 16)
-
-    # Vertical stem from arc bottom to base
-    stem_x = s / 2
-    stem_top = arc_rect.center().y() + arc_rect.height() / 2
-    stem_bot = s * 0.88
-    p.drawLine(int(stem_x), int(stem_top), int(stem_x), int(stem_bot))
-
-    # Horizontal base
-    base_w = s * 0.44
-    base_x = (s - base_w) / 2
-    base_y = s * 0.88
-    pen2 = QPen(c)
-    pen2.setWidthF(s * 0.09)
-    pen2.setCapStyle(Qt.PenCapStyle.RoundCap)
-    p.setPen(pen2)
-    p.drawLine(int(base_x), int(base_y), int(base_x + base_w), int(base_y))
-
-    p.end()
-    return QIcon(px)
+    With no *color* it is a template image on macOS, which the system tints for
+    light and dark menu bars, and white on Windows. Pass a color for the
+    recording state.
+    """
+    template = color is None and is_macos()
+    c = QColor("#000000" if template else (color or "#ffffff"))
+    icon = QIcon()
+    for px in (22, 44):  # 1x and 2x of the 22 pt menu-bar slot
+        pm = QPixmap(px, px)
+        pm.fill(Qt.GlobalColor.transparent)
+        p = QPainter(pm)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(c)
+        s = px / 22
+        bar_w, gap, height = 2.2 * s, 1.6 * s, 15 * s
+        x = (px - (len(_TRAY_BARS) * (bar_w + gap) - gap)) / 2
+        for h in _TRAY_BARS:
+            bh = max(bar_w, height * h)
+            p.drawRoundedRect(QRectF(x, (px - bh) / 2, bar_w, bh), bar_w / 2, bar_w / 2)
+            x += bar_w + gap
+        p.end()
+        icon.addPixmap(pm)
+    icon.setIsMask(template)
+    return icon
 
 
 class App(QObject):
@@ -107,6 +93,7 @@ class App(QObject):
         super().__init__()
         self._app = cast(QApplication, QApplication.instance() or QApplication(sys.argv))
         self._app.setQuitOnLastWindowClosed(False)
+        self._app.setWindowIcon(QIcon(str(_APP_ICON_PATH)))
 
         is_first_run = not CONFIG_PATH.exists()
         self._config = load()
@@ -126,10 +113,7 @@ class App(QObject):
         self._transcriber = Transcriber(self._config)
         self._overlay = OverlayWidget(
             self._config.overlay_position,
-            recording_animation=self._config.recording_animation,
-            transcribing_animation=self._config.transcribing_animation,
-            done_animation=self._config.done_animation,
-            error_animation=self._config.error_animation,
+            level_source=self._recorder.level,
         )
         self._playback_mute = PlaybackMuteController()
         self._session_ready.connect(self._begin_recording_session)
@@ -340,20 +324,6 @@ class App(QObject):
         if old.overlay_position != new_config.overlay_position:
             self._overlay._overlay_position = new_config.overlay_position
             self._overlay._reposition()
-
-        # Update animation selections
-        self._overlay.set_animation_key(
-            OverlayState.RECORDING, new_config.recording_animation
-        )
-        self._overlay.set_animation_key(
-            OverlayState.TRANSCRIBING, new_config.transcribing_animation
-        )
-        self._overlay.set_animation_key(
-            OverlayState.DONE, new_config.done_animation
-        )
-        self._overlay.set_animation_key(
-            OverlayState.ERROR, new_config.error_animation
-        )
 
         # First-run: activate listener once a model is confirmed downloaded
         if not self._listener_active and is_downloaded(new_config.model_size):
@@ -734,7 +704,7 @@ class App(QObject):
 
     def _on_recording_started(self) -> None:
         _log.debug("Recording started")
-        self._tray.setIcon(_make_tray_icon(color="#ff4444"))
+        self._tray.setIcon(_make_tray_icon(color=_RECORDING_RED))
 
         self._stop_transcription_watchdog()
         self._timeout_was_cuda_retry = False
@@ -761,7 +731,7 @@ class App(QObject):
 
     def _on_recording_stopped(self) -> None:
         _log.debug("Recording stopped; transcribing")
-        self._tray.setIcon(_make_tray_icon(color="#ffffff"))
+        self._tray.setIcon(_make_tray_icon())
         self._stop_recording_countdown()
 
         if self._recording_start_pending:
@@ -792,7 +762,7 @@ class App(QObject):
         self._stop_recording_countdown()
         self._arm_start_trigger_suppression()
         self._restore_playback_mute()
-        self._tray.setIcon(_make_tray_icon(color="#ffffff"))
+        self._tray.setIcon(_make_tray_icon())
         self._overlay.show_state(OverlayState.HIDDEN)
         if QSystemTrayIcon.supportsMessages():
             self._tray.showMessage(
