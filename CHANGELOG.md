@@ -6,6 +6,8 @@ and the source `__version__`.
 
 ## [Unreleased]
 
+## [0.2.9] — 2026-11
+
 ### Added
 - Apple Silicon: transcription now runs on the Mac GPU through MLX. On an M5 Max, 25 s of speech
   transcribes in about 0.3 s, down from 14 s. New Mac installs default to the `large-v3-turbo`
