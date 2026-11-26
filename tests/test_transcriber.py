@@ -9,7 +9,13 @@ import numpy as np
 from PyQt6.QtWidgets import QApplication
 
 from spkup.config import AppConfig
-from spkup.transcriber import Transcriber, _TranscriptionWorker, _should_fallback_to_cpu
+from spkup.transcriber import (
+    VOCABULARY_PROMPT_MAX_CHARS,
+    Transcriber,
+    _TranscriptionWorker,
+    _should_fallback_to_cpu,
+    vocabulary_prompt,
+)
 
 # A single QApplication is required for QObject/QThread instantiation.
 _qapp: QApplication = QApplication.instance() or QApplication(sys.argv[:1])  # type: ignore[assignment]
@@ -18,10 +24,10 @@ _qapp: QApplication = QApplication.instance() or QApplication(sys.argv[:1])  # t
 def test_mlx_engine_transcribes_only_the_speech_chunks(monkeypatch) -> None:
     monkeypatch.setattr("spkup.transcriber.uses_mlx_engine", lambda: True)
     audio = np.arange(32000, dtype=np.float32)
-    worker = _TranscriptionWorker(audio, "large-v3-turbo", "cpu", "int8")
+    worker = _TranscriptionWorker(audio, "large-v3-turbo", "cpu", "int8", AppConfig())
     calls: list[tuple[np.ndarray, str]] = []
 
-    def fake_transcribe(a, *, path_or_hf_repo, language):
+    def fake_transcribe(a, *, path_or_hf_repo, language, initial_prompt):
         calls.append((a, path_or_hf_repo))
         return {"text": "  olá world  "}
 
@@ -44,7 +50,9 @@ def test_mlx_engine_transcribes_only_the_speech_chunks(monkeypatch) -> None:
 
 def test_mlx_engine_skips_inference_when_vad_finds_no_speech(monkeypatch) -> None:
     monkeypatch.setattr("spkup.transcriber.uses_mlx_engine", lambda: True)
-    worker = _TranscriptionWorker(np.zeros(32000, dtype=np.float32), "tiny", "cpu", "int8")
+    worker = _TranscriptionWorker(
+        np.zeros(32000, dtype=np.float32), "tiny", "cpu", "int8", AppConfig()
+    )
     mlx = MagicMock()
     with patch("spkup.transcriber.is_downloaded", return_value=True), patch.dict(
         "sys.modules", {"mlx_whisper": mlx}
@@ -67,7 +75,7 @@ def test_should_not_fallback_to_cpu_when_already_on_cpu() -> None:
 
 def test_transcription_falls_back_to_cpu_when_cuda_runtime_missing() -> None:
     audio = np.zeros(1600, dtype=np.float32)
-    worker = _TranscriptionWorker(audio, "large-v3", "cuda", "float16")
+    worker = _TranscriptionWorker(audio, "large-v3", "cuda", "float16", AppConfig())
     model_dir = Path("C:/models/large-v3")
     created_models: list[tuple[str, str, str]] = []
 
@@ -79,7 +87,7 @@ def test_transcription_falls_back_to_cpu_when_cuda_runtime_missing() -> None:
                     "Library cublas64_12.dll is not found or cannot be loaded"
                 )
 
-        def transcribe(self, _audio, language=None, vad_filter=True, beam_size=5):
+        def transcribe(self, _audio, **_kwargs):
             return [SimpleNamespace(text="fallback works")], None
 
     fake_module = SimpleNamespace(WhisperModel=FakeModel)
@@ -97,7 +105,7 @@ def test_transcription_falls_back_to_cpu_when_cuda_runtime_missing() -> None:
 
 def test_transcription_raises_for_non_fallback_errors() -> None:
     audio = np.zeros(1600, dtype=np.float32)
-    worker = _TranscriptionWorker(audio, "large-v3", "cuda", "float16")
+    worker = _TranscriptionWorker(audio, "large-v3", "cuda", "float16", AppConfig())
 
     class FakeModel:
         def __init__(self, model_path: str, device: str, compute_type: str) -> None:
@@ -199,6 +207,7 @@ def test_cancel_active_discards_late_success() -> None:
     t._active_job_id = 7
 
     assert t.cancel_active() is True
+    worker.requestInterruption.assert_called_once()
 
     t._on_worker_finished(7, "late result")
 
@@ -267,3 +276,133 @@ def test_cleanup_worker() -> None:
 
     mock_worker.terminate.assert_called_once()
     assert t._worker is None
+
+
+# ---------------------------------------------------------------------------
+# Vocabulary, post-processing, replacements
+# ---------------------------------------------------------------------------
+
+
+class _RecordingModel:
+    def __init__(self, text: str = "temple base") -> None:
+        self.text = text
+        self.kwargs: dict = {}
+
+    def transcribe(self, _audio, **kwargs):
+        self.kwargs = kwargs
+        return [SimpleNamespace(text=self.text)], None
+
+
+def test_vocabulary_goes_to_initial_prompt_and_hotwords() -> None:
+    worker = _TranscriptionWorker(
+        np.zeros(1600, dtype=np.float32),
+        "tiny",
+        "cpu",
+        "int8",
+        AppConfig(vocabulary=["Tempobase", " ", "spkup"]),
+    )
+    model = _RecordingModel()
+
+    worker._transcribe_with(model)
+
+    assert model.kwargs["initial_prompt"] == "Tempobase, spkup"
+    assert model.kwargs["hotwords"] == "Tempobase, spkup"
+
+
+def test_empty_vocabulary_passes_no_prompt() -> None:
+    worker = _TranscriptionWorker(np.zeros(1600, dtype=np.float32), "tiny", "cpu", "int8", AppConfig())
+    model = _RecordingModel()
+
+    worker._transcribe_with(model)
+
+    assert model.kwargs["initial_prompt"] is None
+    assert model.kwargs["hotwords"] is None
+
+
+def test_mlx_engine_receives_vocabulary_prompt(monkeypatch) -> None:
+    monkeypatch.setattr("spkup.transcriber.uses_mlx_engine", lambda: True)
+    audio = np.ones(32000, dtype=np.float32)
+    worker = _TranscriptionWorker(audio, "tiny", "cpu", "int8", AppConfig(vocabulary=["Diagnet"]))
+    mlx = MagicMock()
+    mlx.transcribe.return_value = {"text": "x"}
+    fake_vad = SimpleNamespace(
+        get_speech_timestamps=lambda a: [{"start": 0, "end": 10}],
+        collect_chunks=lambda a, ts: ([a[:10]], None),
+    )
+    with patch("spkup.transcriber.is_downloaded", return_value=True), patch.dict(
+        "sys.modules", {"mlx_whisper": mlx, "faster_whisper.vad": fake_vad}
+    ):
+        worker._run_transcription()
+
+    assert mlx.transcribe.call_args.kwargs["initial_prompt"] == "Diagnet"
+
+
+def _run_worker_with(config: AppConfig, raw: str) -> list[str]:
+    worker = _TranscriptionWorker(np.zeros(1600, dtype=np.float32), "tiny", "cpu", "int8", config)
+    emitted: list[str] = []
+    worker.finished.connect(emitted.append)
+    with patch.object(worker, "_run_transcription", return_value=raw):
+        worker.run()
+    return emitted
+
+
+def test_worker_applies_llm_then_replacements() -> None:
+    config = AppConfig(
+        post_processing_enabled=True,
+        replacements={"tempo base": "Tempobase"},
+    )
+    with patch("spkup.transcriber.post_process", return_value="Tempo base, ok.") as pp:
+        emitted = _run_worker_with(config, "tempo bass ok")
+
+    pp.assert_called_once_with("tempo bass ok", config)
+    assert emitted == ["Tempobase, ok."]
+
+
+def test_worker_skips_llm_when_disabled_but_still_replaces() -> None:
+    config = AppConfig(replacements={"speak up": "spkup"})
+    with patch("spkup.transcriber.post_process") as pp:
+        emitted = _run_worker_with(config, "open speak up")
+
+    pp.assert_not_called()
+    assert emitted == ["open spkup"]
+
+
+def test_worker_skips_llm_for_empty_transcription() -> None:
+    with patch("spkup.transcriber.post_process") as pp:
+        emitted = _run_worker_with(AppConfig(post_processing_enabled=True), "")
+
+    pp.assert_not_called()
+    assert emitted == [""]
+
+
+def test_start_worker_passes_current_config() -> None:
+    config = AppConfig(vocabulary=["spkup"])
+    t = Transcriber(AppConfig())
+    t.update_config(config)
+
+    with patch("spkup.transcriber._TranscriptionWorker") as MockWorker:
+        t.transcribe(np.zeros(1600, dtype=np.float32))
+
+    assert MockWorker.call_args.args[4] is config
+
+
+def test_vocabulary_prompt_caps_length_on_whole_terms() -> None:
+    terms = [f"Term{i:03d}" for i in range(200)]
+
+    prompt = vocabulary_prompt(terms)
+
+    assert prompt is not None
+    assert len(prompt) <= VOCABULARY_PROMPT_MAX_CHARS
+    assert prompt.split(", ") == terms[: len(prompt.split(", "))]
+
+
+def test_cancelled_worker_does_not_call_llm() -> None:
+    config = AppConfig(post_processing_enabled=True)
+    with (
+        patch("spkup.transcriber.post_process") as pp,
+        patch.object(_TranscriptionWorker, "isInterruptionRequested", return_value=True),
+    ):
+        emitted = _run_worker_with(config, "secret dictation")
+
+    pp.assert_not_called()
+    assert emitted == ["secret dictation"]

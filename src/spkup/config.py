@@ -25,6 +25,13 @@ class AppConfig:
     model_idle_unload_minutes: int = 0
     input_device: dict | None = None
     check_updates_on_startup: bool = True
+    vocabulary: list[str] = dataclasses.field(default_factory=list)
+    replacements: dict[str, str] = dataclasses.field(default_factory=dict)
+    post_processing_enabled: bool = False
+    post_processing_provider: str = "local"
+    post_processing_base_url: str = "http://localhost:11434/v1"
+    post_processing_model: str = "gemma4:e4b"
+    post_processing_instructions: str = ""
 
 
 CONFIG_DIR = user_config_dir()

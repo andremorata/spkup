@@ -6,6 +6,8 @@ Push-to-talk speech-to-text for Windows and Apple Silicon macOS. Hold a hotkey o
 - Single left-click tray icon toggle for record / stop (on macOS the context menu opens with a right-click)
 - Local Whisper inference: [faster-whisper](https://github.com/SYSTRAN/faster-whisper) on Windows, [mlx-whisper](https://github.com/ml-explore/mlx-examples/tree/main/whisper) on the Apple Silicon GPU. No cloud, no API key
 - Mixed Portuguese + English support (auto-detect)
+- Custom vocabulary and whole-word replacements for names Whisper gets wrong
+- Optional LLM clean-up of the transcript, local (Ollama, LM Studio) or OpenAI
 - Minimal always-on-top overlay with a live waveform that follows your voice, plus transcribing / copied states
 - Lives in the system tray; zero friction
 - Startup update checks against GitHub Releases, enabled by default and confirm-before-apply
@@ -63,6 +65,18 @@ validates the bundled CUDA DLLs and adds a Start Menu shortcut.
 From the repository root, `python -m spkup` now resolves the current checkout's
 `src\spkup` code even if you also have an editable install from another clone or
 worktree.
+
+---
+
+## Vocabulary, replacements and LLM post-processing
+
+Open **Settings → Text**.
+
+- **Vocabulary**: one term per line (`Tempobase`, `spkup`). Whisper gets them as a hint, so it leans toward these spellings. It is not a guarantee. Only the first 300 characters of the list reach Whisper.
+- **Replacements**: one `from -> to` rule per line (`temple base -> Tempobase`). They ignore case, match whole words only, and run last.
+- **Post-process with an LLM** (off by default): sends the transcript to a chat model that fixes errors, punctuation and casing, keeps the language, and follows your instructions. If the call fails or takes more than 20 s, the raw text goes to the clipboard.
+  - **Local**: any OpenAI-compatible server. With [Ollama](https://ollama.com), run `ollama pull gemma4:e4b` and keep the default base URL `http://localhost:11434/v1`. Nothing leaves your machine.
+  - **OpenAI**: base URL `https://api.openai.com/v1`, your model and API key. **The transcribed text leaves your machine.** The key is stored in the macOS Keychain or the Windows Credential Manager, never in `config.json` or the logs. Leave the field blank to keep the stored key.
 
 ---
 

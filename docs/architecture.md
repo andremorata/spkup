@@ -6,7 +6,7 @@
 
 ## 1. Overview
 
-spkup is a single-process desktop application for Windows 11 x64 and Apple Silicon macOS. There is no server, no database, and no web frontend. Core transcription runs locally on the user's machine; the only runtime network path is the optional startup update check against GitHub Releases.
+spkup is a single-process desktop application for Windows 11 x64 and Apple Silicon macOS. There is no server, no database, and no web frontend. Core transcription runs locally on the user's machine. The runtime network paths are the optional startup update check against GitHub Releases and the optional LLM post-processing call (off by default; a local server such as Ollama, or OpenAI).
 
 - **Runtime:** Python 3.12, single process
 - **GUI framework:** PyQt6 — tray icon, overlay widget, settings dialog, clipboard
@@ -34,6 +34,7 @@ flowchart TD
     App -- transcribe --> TR[Transcriber\nQObject facade]
     TR -- runs on --> TW[_TranscriptionWorker\nQThread]
     TW -- faster-whisper\nplatform device --> ML[(Model\nplatform cache)]
+    TW -- optional\nchat/completions --> LLM[(LLM server\nOllama / OpenAI)]
     TW -- transcription_finished --> TR
     TR --> App
     App -- add/list/delete --> RH[TranscriptionHistory\nsession memory]
@@ -62,12 +63,13 @@ flowchart TD
 | `hotkey.py` | `HotkeyListener` | pynput keyboard listener; emits `recording_started` / `recording_stopped` on Qt main thread |
 | `recorder.py` | `AudioRecorder` | sounddevice stream; accumulates float32 chunks; exposes the live input loudness via `level()` (0..1, dB-mapped by `rms_to_level`); emits `recording_finished(np.ndarray)` |
 | `transcriber.py` | `Transcriber` | Facade; owns `_TranscriptionWorker` lifecycle; busy guard; emits `transcription_finished(str)` |
-| `transcriber.py` | `_TranscriptionWorker` | QThread worker; lazy model load; faster-whisper inference, or VAD + mlx-whisper on Apple Silicon; emits result or error |
+| `transcriber.py` | `_TranscriptionWorker` | QThread worker; lazy model load; faster-whisper inference, or VAD + mlx-whisper on Apple Silicon; passes the vocabulary as `initial_prompt` (and `hotwords` on faster-whisper); then runs LLM post-processing (if enabled) and the replacements on the same thread; emits result or error |
+| `post_processing.py` | `post_process`, `apply_replacements` | OpenAI-compatible `POST {base_url}/chat/completions` via `urllib` (20 s timeout); returns the raw text on any failure. Reads the OpenAI key from `keyring` (service `spkup`, user `openai-api-key`). Whole-word, case-insensitive replacements |
 | `model_manager.py` | `ModelManager` | Cache dir management; `is_downloaded`; `repo_id` picks the CTranslate2 or MLX repo for the platform engine; `_ModelDownloadWorker` for HuggingFace downloads |
 | `overlay.py` | `OverlayWidget` | Frameless always-on-top click-through capsule. RECORDING draws a scrolling waveform from the recorder's live level and swaps the red dot for a countdown in the last 10 s; TRANSCRIBING shows a shimmer; DONE / ERROR show a glyph and label. Width morphs between states; the overlay fades in and out |
 | `clipboard.py` | `copy_to_clipboard` | `QApplication.clipboard().setText()` — Unicode-safe |
 | `app.py` | `App` | `QApplication` + `QSystemTrayIcon`; instantiates all components; wires all signals; owns tray click recording toggle, trigger suppression, and the single `_cancel_active_transcription` entry point that discards an in-progress transcription (used today by the hotkey/tray start-trigger routing during the transcribing state, and reserved for a future overlay cancel button) |
-| `settings_dialog.py` | `SettingsDialog` | Hotkey capture, model picker, device selector, overlay position, playback-mute toggle; reinitializes components on save |
+| `settings_dialog.py` | `SettingsDialog` | Hotkey capture, model picker, device selector, overlay position, playback-mute toggle; Text tab (vocabulary, replacements, LLM post-processing, OpenAI key written to `keyring`); reinitializes components on save |
 | `transcription_history.py` | `TranscriptionHistory` | Session-scoped in-memory store of the last 5 completed transcriptions |
 | `transcription_history.py` | `TranscriptionHistoryEntry` | Immutable history item with stable session-local id and text |
 | `transcription_history_window.py` | `TranscriptionHistoryWindow` | Non-modal recent-history window; previews entries and emits copy/delete requests |
@@ -112,6 +114,11 @@ Recording stop / cancel / error / transcription finalize
 
 AudioRecorder.recording_finished(audio: np.ndarray)
   → Transcriber.transcribe(audio)
+    → _TranscriptionWorker (QThread), with the current AppConfig:
+      Whisper (+ vocabulary prompt)
+      → post_process() if post_processing_enabled and text is not empty (raw text on failure)
+      → apply_replacements()
+      → finished(text)
 
 Transcriber.transcription_finished(text: str)
   → copy_to_clipboard(text)
@@ -162,7 +169,7 @@ Startup update check
 | Qt main thread | `App`, `OverlayWidget` (polls `AudioRecorder.level()` on a 16 ms timer while visible), all signal slots | — |
 | PortAudio callback thread | `AudioRecorder._audio_callback`: appends chunks and writes the latest level float | Plain attribute writes only; the main thread reads them. No Qt calls |
 | pynput listener thread | `HotkeyListener._on_press` / `_on_release` | `QMetaObject.invokeMethod` with `QueuedConnection` → main thread |
-| `_TranscriptionWorker` (QThread) | faster-whisper inference | `pyqtSignal` → main thread |
+| `_TranscriptionWorker` (QThread) | Whisper inference, then the optional LLM HTTP call, `keyring` read and replacements | `pyqtSignal` → main thread |
 | `_ModelDownloadWorker` (QThread) | HuggingFace model download | `pyqtSignal` → main thread |
 | `UpdateCheckWorker` (QThread) | GitHub Releases metadata request | `pyqtSignal` → main thread |
 | `UpdateDownloadWorker` (QThread) | Confirmed release ZIP download | `pyqtSignal` → main thread |
@@ -186,6 +193,15 @@ Startup update check
 | `max_recording_seconds` | `120` | Safety cutoff for `AudioRecorder`; also drives the live recording countdown shown in the overlay |
 | `mute_playback_while_recording` | `False` | Windows-only; hidden/disabled on macOS |
 | `check_updates_on_startup` | `True` | When enabled, startup checks GitHub Releases for a newer platform ZIP; Windows can auto-apply after confirmation, macOS is manual-update only |
+| `vocabulary` | `[]` | Terms joined into Whisper's `initial_prompt` (both engines) and `hotwords` (faster-whisper), capped at 300 characters on whole terms so the 448-token window keeps room for the text. Empty → `None`, same as before. Also listed in the LLM prompt |
+| `replacements` | `{}` | `from → to` rules, case-insensitive, whole words; applied last |
+| `post_processing_enabled` | `False` | Runs the LLM step after transcription |
+| `post_processing_provider` | `"local"` | `"local"` (no auth header) or `"openai"` (`Authorization: Bearer` from `keyring`) |
+| `post_processing_base_url` | `"http://localhost:11434/v1"` | OpenAI-compatible base URL; Settings switches it to `https://api.openai.com/v1` for OpenAI |
+| `post_processing_model` | `"gemma4:e4b"` | Model name sent to the server; OpenAI has no default |
+| `post_processing_instructions` | `""` | Free-form instructions appended to the system prompt |
+
+The OpenAI API key is never stored in `config.json`. It lives in the OS keychain (macOS Keychain, Windows Credential Manager) through `keyring`.
 
 ---
 
@@ -202,6 +218,7 @@ Startup update check
 | 2026-05-20 | Confirm-before-apply startup updates | Use the existing GitHub Releases ZIP channel without silent downloads or silent installs |
 | 2026-11-24 | mlx-whisper on Apple Silicon, large-v3-turbo default there | Measured on an M5 Max: 0.27 s vs 14.1 s (faster-whisper CPU) for 25 s of PT+EN speech. MLX large-v3 translated the English parts into Portuguese; turbo kept both languages. Windows engine and default unchanged |
 | 2026-11-24 | One voice-reactive overlay replaces the 12 selectable animations | The meter shows real input loudness, which also confirms the mic works; one design is less code and fewer settings. Old `*_animation` config keys are ignored on load |
+| 2026-11-26 | Order: Whisper with vocabulary → optional LLM → replacements, all in `_TranscriptionWorker` | No new thread or signal. Replacements run last so they are the final word. Any LLM failure keeps the raw text so a dictation is never lost |
 | 2026-05-27 | Add macOS ARM64 support without migrating Windows baseline | Platform abstractions preserve Windows paths, artifacts, CUDA validation, and auto-update apply while adding CPU-oriented Apple Silicon runtime and packaging |
 
 ---

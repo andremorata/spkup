@@ -43,7 +43,7 @@ def _make_fake_whisper(model_dir: Path, created: list):
         def __init__(self, model_path: str, device: str, compute_type: str) -> None:
             created.append((model_path, device, compute_type))
 
-        def transcribe(self, _audio, language=None, vad_filter=True, beam_size=5):
+        def transcribe(self, _audio, **_kwargs):
             return [SimpleNamespace(text="hello")], None
 
     return FakeModel
@@ -63,7 +63,7 @@ def _flush_events():
 
 def _run_worker(model_dir: Path, fake_module):
     audio = np.zeros(1600, dtype=np.float32)
-    worker = _TranscriptionWorker(audio, "large-v3", "cpu", "int8")
+    worker = _TranscriptionWorker(audio, "large-v3", "cpu", "int8", AppConfig())
     with (
         patch("spkup.transcriber.is_downloaded", return_value=True),
         patch("spkup.transcriber.model_path", return_value=model_dir),

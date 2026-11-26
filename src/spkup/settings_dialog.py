@@ -3,16 +3,19 @@ from __future__ import annotations
 import dataclasses
 from typing import cast
 
+import keyring
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFocusEvent, QKeyEvent, QStandardItemModel
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
+    QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QMessageBox,
+    QPlainTextEdit,
     QProgressDialog,
     QPushButton,
     QSpinBox,
@@ -31,6 +34,8 @@ from spkup.model_manager import (
     is_downloaded,
 )
 from spkup.platform_support import is_macos, supports_playback_mute, uses_mlx_engine
+from spkup.post_processing import KEYRING_SERVICE, KEYRING_USERNAME, OPENAI_BASE_URL
+from spkup.transcriber import VOCABULARY_PROMPT_MAX_CHARS
 
 
 def _detect_cuda() -> bool:
@@ -156,6 +161,17 @@ class HotkeyEdit(QLineEdit):
 
 
 _MODELS = ["tiny", "base", "small", "medium", "large-v2", "large-v3", "large-v3-turbo"]
+
+
+def parse_replacements(text: str) -> dict[str, str]:
+    """Parse one ``from -> to`` rule per line, skipping blank or malformed lines."""
+    rules: dict[str, str] = {}
+    for line in text.splitlines():
+        source, arrow, target = line.partition("->")
+        if arrow and source.strip():
+            rules[source.strip()] = target.strip()
+    return rules
+
 
 class SettingsDialog(QDialog):
     """Settings dialog for hotkey, model, device, and overlay position."""
@@ -379,6 +395,80 @@ class SettingsDialog(QDialog):
 
         tabs.addTab(overlay_tab, "Overlay")
 
+        # ═══════════════ Text tab ═══════════════
+        text_tab = QWidget()
+        text_layout = QVBoxLayout(text_tab)
+        text_layout.setSpacing(12)
+
+        text_layout.addWidget(QLabel("Vocabulary (one term per line)"))
+        self._vocabulary_edit = QPlainTextEdit("\n".join(config.vocabulary))
+        self._vocabulary_edit.setMaximumHeight(80)
+        self._vocabulary_edit.setPlaceholderText("Tempobase\nspkup")
+        self._vocabulary_edit.setToolTip(
+            "Names and terms Whisper should spell this way. It is a hint, not a guarantee."
+        )
+        text_layout.addWidget(self._vocabulary_edit)
+
+        text_layout.addWidget(QLabel("Replacements (one \"from -> to\" per line)"))
+        self._replacements_edit = QPlainTextEdit(
+            "\n".join(f"{source} -> {target}" for source, target in config.replacements.items())
+        )
+        self._replacements_edit.setMaximumHeight(80)
+        self._replacements_edit.setPlaceholderText("temple base -> Tempobase")
+        self._replacements_edit.setToolTip(
+            "Applied last, ignoring case and matching whole words only."
+        )
+        text_layout.addWidget(self._replacements_edit)
+
+        self._post_processing_group = QGroupBox("Post-process with an LLM")
+        self._post_processing_group.setCheckable(True)
+        self._post_processing_group.setChecked(config.post_processing_enabled)
+        llm_layout = QVBoxLayout(self._post_processing_group)
+
+        llm_layout.addWidget(QLabel("Provider"))
+        self._provider_combo = QComboBox()
+        self._provider_combo.addItem("Local (Ollama, LM Studio)", "local")
+        self._provider_combo.addItem("OpenAI", "openai")
+        self._provider_combo.setCurrentIndex(
+            max(0, self._provider_combo.findData(config.post_processing_provider))
+        )
+        self._provider = self._provider_combo.currentData()
+        self._provider_fields: dict[str, tuple[str, str]] = {}
+        self._provider_combo.currentIndexChanged.connect(self._on_provider_changed)
+        llm_layout.addWidget(self._provider_combo)
+
+        self._privacy_note = QLabel(
+            "Your transcribed text is sent to OpenAI and leaves this machine."
+        )
+        self._privacy_note.setWordWrap(True)
+        self._privacy_note.setStyleSheet("color:#E65100;")
+        llm_layout.addWidget(self._privacy_note)
+
+        llm_layout.addWidget(QLabel("Base URL"))
+        self._base_url_edit = QLineEdit(config.post_processing_base_url)
+        llm_layout.addWidget(self._base_url_edit)
+
+        llm_layout.addWidget(QLabel("Model"))
+        self._llm_model_edit = QLineEdit(config.post_processing_model)
+        llm_layout.addWidget(self._llm_model_edit)
+
+        self._api_key_label = QLabel("API key")
+        llm_layout.addWidget(self._api_key_label)
+        self._api_key_edit = QLineEdit()
+        self._api_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        llm_layout.addWidget(self._api_key_edit)
+
+        llm_layout.addWidget(QLabel("Instructions"))
+        self._instructions_edit = QPlainTextEdit(config.post_processing_instructions)
+        self._instructions_edit.setMaximumHeight(80)
+        self._instructions_edit.setPlaceholderText("e.g. Use a formal tone. Format lists as bullets.")
+        llm_layout.addWidget(self._instructions_edit)
+
+        text_layout.addWidget(self._post_processing_group)
+        self._update_provider_widgets()
+
+        tabs.addTab(text_tab, "Text")
+
         # ── Buttons ───────────────────────────────────────────────────────────
         main_layout.addSpacing(8)
         btn_row = QWidget()
@@ -489,7 +579,94 @@ class SettingsDialog(QDialog):
         self._download_btn.setToolTip(self._download_tooltip(model_size))
         self._delete_btn.setVisible(False)
 
+    def _is_openai(self) -> bool:
+        return self._provider_combo.currentData() == "openai"
+
+    def _on_provider_changed(self, _index: int) -> None:
+        # Each provider keeps what the user typed, so flipping back and forth loses nothing.
+        self._provider_fields[self._provider] = (
+            self._base_url_edit.text(),
+            self._llm_model_edit.text(),
+        )
+        self._provider = self._provider_combo.currentData()
+        defaults = {
+            "local": (AppConfig.post_processing_base_url, AppConfig.post_processing_model),
+            "openai": (OPENAI_BASE_URL, ""),
+        }
+        base_url, model = self._provider_fields.get(self._provider, defaults[self._provider])
+        self._base_url_edit.setText(base_url)
+        self._llm_model_edit.setText(model)
+        self._update_provider_widgets()
+
+    def _update_provider_widgets(self) -> None:
+        openai = self._is_openai()
+        for widget in (self._privacy_note, self._api_key_label, self._api_key_edit):
+            widget.setVisible(openai)
+        self._llm_model_edit.setPlaceholderText("OpenAI model name" if openai else "")
+        if not openai:
+            return
+        try:
+            stored = bool(keyring.get_password(KEYRING_SERVICE, KEYRING_USERNAME))
+        except Exception:
+            stored = False
+        self._api_key_edit.setPlaceholderText(
+            "Stored in the system keychain. Leave blank to keep it."
+            if stored
+            else "Paste your OpenAI API key"
+        )
+
     def _on_save(self) -> None:
+        if self._post_processing_group.isChecked() and not (
+            self._base_url_edit.text().strip() and self._llm_model_edit.text().strip()
+        ):
+            QMessageBox.warning(
+                self,
+                "Post-processing incomplete",
+                "Fill in the base URL and the model, or turn post-processing off.",
+            )
+            return
+        self._config.vocabulary = [
+            term.strip()
+            for term in self._vocabulary_edit.toPlainText().splitlines()
+            if term.strip()
+        ]
+        self._config.replacements = parse_replacements(
+            self._replacements_edit.toPlainText()
+        )
+        self._config.post_processing_enabled = self._post_processing_group.isChecked()
+        self._config.post_processing_provider = self._provider_combo.currentData()
+        self._config.post_processing_base_url = self._base_url_edit.text().strip()
+        self._config.post_processing_model = self._llm_model_edit.text().strip()
+        self._config.post_processing_instructions = (
+            self._instructions_edit.toPlainText().strip()
+        )
+        api_key = self._api_key_edit.text().strip()
+        if api_key and self._is_openai():
+            try:
+                keyring.set_password(KEYRING_SERVICE, KEYRING_USERNAME, api_key)
+            except Exception as exc:
+                QMessageBox.warning(self, "API key not saved", str(exc))
+                return
+        if self._post_processing_group.isChecked() and self._is_openai() and not api_key:
+            try:
+                stored = bool(keyring.get_password(KEYRING_SERVICE, KEYRING_USERNAME))
+            except Exception:
+                stored = False
+            if not stored:
+                QMessageBox.warning(
+                    self,
+                    "OpenAI API key missing",
+                    "Paste your OpenAI API key, or turn post-processing off.",
+                )
+                return
+        if len(", ".join(self._config.vocabulary)) > VOCABULARY_PROMPT_MAX_CHARS:
+            message = (
+                f"Only the first {VOCABULARY_PROMPT_MAX_CHARS} characters of the vocabulary "
+                "reach Whisper."
+            )
+            if self._config.post_processing_enabled:
+                message += " The LLM still gets every term."
+            QMessageBox.information(self, "Vocabulary too long", message)
         save(self._config)
         self.settings_saved.emit(self._config)
         self.accept()
