@@ -193,7 +193,7 @@ Startup update check
 | `max_recording_seconds` | `120` | Safety cutoff for `AudioRecorder`; also drives the live recording countdown shown in the overlay |
 | `mute_playback_while_recording` | `False` | Windows-only; hidden/disabled on macOS |
 | `check_updates_on_startup` | `True` | When enabled, startup checks GitHub Releases for a newer platform ZIP; Windows can auto-apply after confirmation, macOS is manual-update only |
-| `vocabulary` | `[]` | Terms joined into Whisper's `initial_prompt` (both engines) and `hotwords` (faster-whisper). Empty → `None`, same as before. Also listed in the LLM prompt |
+| `vocabulary` | `[]` | Terms joined into Whisper's `initial_prompt` (both engines) and `hotwords` (faster-whisper), capped at 300 characters on whole terms so the 448-token window keeps room for the text. Empty → `None`, same as before. Also listed in the LLM prompt |
 | `replacements` | `{}` | `from → to` rules, case-insensitive, whole words; applied last |
 | `post_processing_enabled` | `False` | Runs the LLM step after transcription |
 | `post_processing_provider` | `"local"` | `"local"` (no auth header) or `"openai"` (`Authorization: Bearer` from `keyring`) |

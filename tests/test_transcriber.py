@@ -9,7 +9,13 @@ import numpy as np
 from PyQt6.QtWidgets import QApplication
 
 from spkup.config import AppConfig
-from spkup.transcriber import Transcriber, _TranscriptionWorker, _should_fallback_to_cpu
+from spkup.transcriber import (
+    VOCABULARY_PROMPT_MAX_CHARS,
+    Transcriber,
+    _TranscriptionWorker,
+    _should_fallback_to_cpu,
+    vocabulary_prompt,
+)
 
 # A single QApplication is required for QObject/QThread instantiation.
 _qapp: QApplication = QApplication.instance() or QApplication(sys.argv[:1])  # type: ignore[assignment]
@@ -377,3 +383,25 @@ def test_start_worker_passes_current_config() -> None:
         t.transcribe(np.zeros(1600, dtype=np.float32))
 
     assert MockWorker.call_args.args[4] is config
+
+
+def test_vocabulary_prompt_caps_length_on_whole_terms() -> None:
+    terms = [f"Term{i:03d}" for i in range(200)]
+
+    prompt = vocabulary_prompt(terms)
+
+    assert prompt is not None
+    assert len(prompt) <= VOCABULARY_PROMPT_MAX_CHARS
+    assert prompt.split(", ") == terms[: len(prompt.split(", "))]
+
+
+def test_cancelled_worker_does_not_call_llm() -> None:
+    config = AppConfig(post_processing_enabled=True)
+    with (
+        patch("spkup.transcriber.post_process") as pp,
+        patch.object(_TranscriptionWorker, "isInterruptionRequested", return_value=True),
+    ):
+        emitted = _run_worker_with(config, "secret dictation")
+
+    pp.assert_not_called()
+    assert emitted == ["secret dictation"]

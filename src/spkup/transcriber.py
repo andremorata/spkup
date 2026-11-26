@@ -70,8 +70,23 @@ def _should_fallback_to_cpu(device: str, exc: Exception) -> bool:
     return any(marker in message for marker in runtime_markers)
 
 
+# NOTE: faster-whisper sends the prompt twice (initial_prompt + hotwords) inside a 448-token
+# window. Capping the characters keeps room for the decoded text.
+VOCABULARY_PROMPT_MAX_CHARS = 300
+
+
 def vocabulary_prompt(vocabulary: list[str]) -> str | None:
-    terms = [term.strip() for term in vocabulary if term.strip()]
+    terms: list[str] = []
+    for term in (term.strip() for term in vocabulary):
+        if not term:
+            continue
+        if len(", ".join([*terms, term])) > VOCABULARY_PROMPT_MAX_CHARS:
+            _log.warning(
+                "Vocabulary prompt capped at %d characters; extra terms ignored",
+                VOCABULARY_PROMPT_MAX_CHARS,
+            )
+            break
+        terms.append(term)
     return ", ".join(terms) or None
 
 
@@ -103,7 +118,12 @@ class _TranscriptionWorker(QThread):
     def run(self) -> None:
         try:
             text = self._run_transcription()
-            if text and self._config.post_processing_enabled:
+            # A cancelled job must not send the dictation to the LLM.
+            if (
+                text
+                and self._config.post_processing_enabled
+                and not self.isInterruptionRequested()
+            ):
                 text = post_process(text, self._config)
             self.finished.emit(apply_replacements(text, self._config.replacements))
         except Exception as exc:
@@ -420,6 +440,7 @@ class Transcriber(QObject):
                 pass
 
     def _detach_worker(self, worker: _TranscriptionWorker) -> None:
+        worker.requestInterruption()
         self._disconnect_worker_signals(worker)
 
         cleanup_slot = getattr(worker, "_cleanup_slot", None)

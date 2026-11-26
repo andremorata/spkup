@@ -72,7 +72,7 @@ worktree.
 
 Open **Settings → Text**.
 
-- **Vocabulary**: one term per line (`Tempobase`, `spkup`). Whisper gets them as a hint, so it leans toward these spellings. It is not a guarantee.
+- **Vocabulary**: one term per line (`Tempobase`, `spkup`). Whisper gets them as a hint, so it leans toward these spellings. It is not a guarantee. Only the first 300 characters of the list reach Whisper.
 - **Replacements**: one `from -> to` rule per line (`temple base -> Tempobase`). They ignore case, match whole words only, and run last.
 - **Post-process with an LLM** (off by default): sends the transcript to a chat model that fixes errors, punctuation and casing, keeps the language, and follows your instructions. If the call fails or takes more than 20 s, the raw text goes to the clipboard.
   - **Local**: any OpenAI-compatible server. With [Ollama](https://ollama.com), run `ollama pull gemma4:e4b` and keep the default base URL `http://localhost:11434/v1`. Nothing leaves your machine.

@@ -105,3 +105,34 @@ def test_keyring_read_failure_does_not_break_dialog(monkeypatch) -> None:
 
     assert dialog._api_key_edit.placeholderText()
     dialog.reject()
+
+
+def test_switching_provider_keeps_custom_local_url(dialog_factory) -> None:
+    dialog, _ = dialog_factory(AppConfig())
+    dialog._base_url_edit.setText("http://localhost:1234/v1")
+    dialog._llm_model_edit.setText("qwen3")
+
+    dialog._provider_combo.setCurrentIndex(dialog._provider_combo.findData("openai"))
+    dialog._llm_model_edit.setText("some-openai-model")
+    dialog._provider_combo.setCurrentIndex(dialog._provider_combo.findData("local"))
+
+    assert dialog._base_url_edit.text() == "http://localhost:1234/v1"
+    assert dialog._llm_model_edit.text() == "qwen3"
+    dialog._provider_combo.setCurrentIndex(dialog._provider_combo.findData("openai"))
+    assert dialog._llm_model_edit.text() == "some-openai-model"
+    dialog.reject()
+
+
+def test_save_blocked_when_post_processing_has_no_model(dialog_factory) -> None:
+    dialog, _ = dialog_factory(AppConfig(post_processing_provider="openai"))
+    saved: list[AppConfig] = []
+    dialog.settings_saved.connect(saved.append)
+    dialog._post_processing_group.setChecked(True)
+    dialog._llm_model_edit.setText("")
+
+    with patch("spkup.settings_dialog.QMessageBox") as box:
+        dialog._on_save()
+
+    box.warning.assert_called_once()
+    assert saved == []
+    dialog.reject()

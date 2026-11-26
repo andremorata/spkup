@@ -431,6 +431,8 @@ class SettingsDialog(QDialog):
         self._provider_combo.setCurrentIndex(
             max(0, self._provider_combo.findData(config.post_processing_provider))
         )
+        self._provider = self._provider_combo.currentData()
+        self._provider_fields: dict[str, tuple[str, str]] = {}
         self._provider_combo.currentIndexChanged.connect(self._on_provider_changed)
         llm_layout.addWidget(self._provider_combo)
 
@@ -580,12 +582,19 @@ class SettingsDialog(QDialog):
         return self._provider_combo.currentData() == "openai"
 
     def _on_provider_changed(self, _index: int) -> None:
-        if self._is_openai():
-            self._base_url_edit.setText(OPENAI_BASE_URL)
-            self._llm_model_edit.clear()
-        else:
-            self._base_url_edit.setText(AppConfig.post_processing_base_url)
-            self._llm_model_edit.setText(AppConfig.post_processing_model)
+        # Each provider keeps what the user typed, so flipping back and forth loses nothing.
+        self._provider_fields[self._provider] = (
+            self._base_url_edit.text(),
+            self._llm_model_edit.text(),
+        )
+        self._provider = self._provider_combo.currentData()
+        defaults = {
+            "local": (AppConfig.post_processing_base_url, AppConfig.post_processing_model),
+            "openai": (OPENAI_BASE_URL, ""),
+        }
+        base_url, model = self._provider_fields.get(self._provider, defaults[self._provider])
+        self._base_url_edit.setText(base_url)
+        self._llm_model_edit.setText(model)
         self._update_provider_widgets()
 
     def _update_provider_widgets(self) -> None:
@@ -606,6 +615,15 @@ class SettingsDialog(QDialog):
         )
 
     def _on_save(self) -> None:
+        if self._post_processing_group.isChecked() and not (
+            self._base_url_edit.text().strip() and self._llm_model_edit.text().strip()
+        ):
+            QMessageBox.warning(
+                self,
+                "Post-processing incomplete",
+                "Fill in the base URL and the model, or turn post-processing off.",
+            )
+            return
         self._config.vocabulary = [
             term.strip()
             for term in self._vocabulary_edit.toPlainText().splitlines()
