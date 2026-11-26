@@ -81,7 +81,8 @@ def vocabulary_prompt(vocabulary: list[str]) -> str | None:
         if not term:
             continue
         if len(", ".join([*terms, term])) > VOCABULARY_PROMPT_MAX_CHARS:
-            _log.warning(
+            # Settings warns the user once on save; logging here would repeat per dictation.
+            _log.debug(
                 "Vocabulary prompt capped at %d characters; extra terms ignored",
                 VOCABULARY_PROMPT_MAX_CHARS,
             )

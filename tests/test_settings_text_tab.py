@@ -136,3 +136,48 @@ def test_save_blocked_when_post_processing_has_no_model(dialog_factory) -> None:
     box.warning.assert_called_once()
     assert saved == []
     dialog.reject()
+
+
+def test_save_blocked_when_openai_has_no_key(dialog_factory) -> None:
+    dialog, kr = dialog_factory(AppConfig(post_processing_provider="openai"))
+    saved: list[AppConfig] = []
+    dialog.settings_saved.connect(saved.append)
+    dialog._post_processing_group.setChecked(True)
+    dialog._llm_model_edit.setText("some-openai-model")
+    kr.get_password.return_value = None
+
+    with patch("spkup.settings_dialog.QMessageBox") as box:
+        dialog._on_save()
+
+    box.warning.assert_called_once()
+    assert saved == []
+    dialog.reject()
+
+
+def test_save_blocked_when_keyring_write_fails(dialog_factory) -> None:
+    dialog, kr = dialog_factory(AppConfig(post_processing_provider="openai"))
+    saved: list[AppConfig] = []
+    dialog.settings_saved.connect(saved.append)
+    dialog._llm_model_edit.setText("some-openai-model")
+    dialog._api_key_edit.setText("sk-new")
+    kr.set_password.side_effect = RuntimeError("locked")
+
+    with patch("spkup.settings_dialog.QMessageBox") as box:
+        dialog._on_save()
+
+    box.warning.assert_called_once()
+    assert saved == []
+    dialog.reject()
+
+
+def test_save_warns_once_when_vocabulary_is_capped(dialog_factory) -> None:
+    dialog, _ = dialog_factory(AppConfig())
+    saved: list[AppConfig] = []
+    dialog.settings_saved.connect(saved.append)
+    dialog._vocabulary_edit.setPlainText("\n".join(f"Term{i:03d}" for i in range(100)))
+
+    with patch("spkup.settings_dialog.QMessageBox") as box:
+        dialog._on_save()
+
+    box.information.assert_called_once()
+    assert len(saved[0].vocabulary) == 100

@@ -35,6 +35,7 @@ from spkup.model_manager import (
 )
 from spkup.platform_support import is_macos, supports_playback_mute, uses_mlx_engine
 from spkup.post_processing import KEYRING_SERVICE, KEYRING_USERNAME, OPENAI_BASE_URL
+from spkup.transcriber import VOCABULARY_PROMPT_MAX_CHARS, vocabulary_prompt
 
 
 def _detect_cuda() -> bool:
@@ -645,6 +646,27 @@ class SettingsDialog(QDialog):
                 keyring.set_password(KEYRING_SERVICE, KEYRING_USERNAME, api_key)
             except Exception as exc:
                 QMessageBox.warning(self, "API key not saved", str(exc))
+                return
+        if self._post_processing_group.isChecked() and self._is_openai() and not api_key:
+            try:
+                stored = bool(keyring.get_password(KEYRING_SERVICE, KEYRING_USERNAME))
+            except Exception:
+                stored = False
+            if not stored:
+                QMessageBox.warning(
+                    self,
+                    "OpenAI API key missing",
+                    "Paste your OpenAI API key, or turn post-processing off.",
+                )
+                return
+        prompt = vocabulary_prompt(self._config.vocabulary)
+        if prompt is not None and len(prompt.split(", ")) < len(self._config.vocabulary):
+            QMessageBox.information(
+                self,
+                "Vocabulary too long",
+                f"Only the first {VOCABULARY_PROMPT_MAX_CHARS} characters of the vocabulary "
+                "reach Whisper. The remaining terms still reach the LLM.",
+            )
         save(self._config)
         self.settings_saved.emit(self._config)
         self.accept()

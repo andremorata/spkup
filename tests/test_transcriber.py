@@ -207,6 +207,7 @@ def test_cancel_active_discards_late_success() -> None:
     t._active_job_id = 7
 
     assert t.cancel_active() is True
+    worker.requestInterruption.assert_called_once()
 
     t._on_worker_finished(7, "late result")
 
