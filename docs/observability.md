@@ -50,6 +50,8 @@ No APM, no distributed tracing, no metrics dashboards.
 | Transcription finished, text preview | INFO | `transcriber` |
 | Model loaded (first use), elapsed | INFO | `transcriber` |
 | CUDA OOM, falling back to CPU | WARNING | `transcriber` |
+| LLM post-processing completed, latency, provider, model | INFO | `post_processing` |
+| LLM post-processing failed (connection, HTTP, timeout, bad JSON, empty reply, missing key, keyring error), provider, model, reason; raw text used | WARNING | `post_processing` |
 | Mic error | ERROR | `recorder` |
 | Settings saved | INFO | `settings_dialog` |
 | Model download progress | DEBUG | `model_manager` |
@@ -88,3 +90,4 @@ Useful filters:
 - `ERROR` or `WARNING` lines for failures
 - `transcriber` logger for inference problems
 - `hotkey` logger for missed key events
+- `post_processing` logger for LLM latency and fallbacks. The API key is never logged

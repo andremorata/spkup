@@ -11,6 +11,7 @@ from PyQt6.QtCore import QObject, QThread, QTimer, pyqtSignal
 from spkup.config import AppConfig
 from spkup.model_manager import ModelNotFoundError, is_downloaded, model_path
 from spkup.platform_support import uses_mlx_engine
+from spkup.post_processing import apply_replacements, post_process
 
 _log = logging.getLogger(__name__)
 
@@ -69,6 +70,11 @@ def _should_fallback_to_cpu(device: str, exc: Exception) -> bool:
     return any(marker in message for marker in runtime_markers)
 
 
+def vocabulary_prompt(vocabulary: list[str]) -> str | None:
+    terms = [term.strip() for term in vocabulary if term.strip()]
+    return ", ".join(terms) or None
+
+
 class _TranscriptionWorker(QThread):
     """Transcribes a float32 audio array in a background thread.
 
@@ -84,17 +90,22 @@ class _TranscriptionWorker(QThread):
         model_size: str,
         device: str,
         compute_type: str,
+        config: AppConfig,
     ) -> None:
         super().__init__()
         self._audio = audio
         self._model_size = model_size
         self._device = device
         self._compute_type = compute_type
+        self._config = config
+        self._prompt = vocabulary_prompt(config.vocabulary)
 
     def run(self) -> None:
         try:
             text = self._run_transcription()
-            self.finished.emit(text)
+            if text and self._config.post_processing_enabled:
+                text = post_process(text, self._config)
+            self.finished.emit(apply_replacements(text, self._config.replacements))
         except Exception as exc:
             _log.error("Transcription error: %s", exc)
             self.error.emit(str(exc))
@@ -185,7 +196,10 @@ class _TranscriptionWorker(QThread):
             _log.info("VAD found no speech")
             return ""
         result = mlx_whisper.transcribe(
-            speech, path_or_hf_repo=model_path_str, language=None
+            speech,
+            path_or_hf_repo=model_path_str,
+            language=None,
+            initial_prompt=self._prompt,
         )
         text = str(result["text"]).strip()
         _log.info("Inference completed in %.2f s", time.monotonic() - started)
@@ -195,7 +209,12 @@ class _TranscriptionWorker(QThread):
         _log.debug("Inference starting...")
         inference_started = time.monotonic()
         segments, _ = model.transcribe(
-            self._audio, language=None, vad_filter=True, beam_size=5
+            self._audio,
+            language=None,
+            vad_filter=True,
+            beam_size=5,
+            initial_prompt=self._prompt,
+            hotwords=self._prompt,
         )
         text = " ".join(seg.text for seg in segments).strip()
         _log.info(
@@ -361,7 +380,9 @@ class Transcriber(QObject):
     ) -> None:
         self._next_job_id += 1
         job_id = self._next_job_id
-        worker = _TranscriptionWorker(audio, model_size, device, compute_type)
+        worker = _TranscriptionWorker(
+            audio, model_size, device, compute_type, self._config
+        )
         worker._job_id = job_id
         worker._finished_slot = lambda text, job_id=job_id: self._on_worker_finished(
             job_id, text

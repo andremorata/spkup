@@ -165,3 +165,54 @@ def test_load_missing_update_check_falls_back_to_enabled(tmp_path, monkeypatch) 
     result = load()
 
     assert result.check_updates_on_startup is True
+
+
+def test_text_processing_defaults_keep_todays_behavior() -> None:
+    cfg = AppConfig()
+
+    assert cfg.vocabulary == []
+    assert cfg.replacements == {}
+    assert cfg.post_processing_enabled is False
+    assert cfg.post_processing_provider == "local"
+    assert cfg.post_processing_base_url == "http://localhost:11434/v1"
+    assert cfg.post_processing_instructions == ""
+
+
+def test_load_old_config_without_text_processing_fields(tmp_path, monkeypatch) -> None:
+    cfg_dir = tmp_path / "spkup"
+    cfg_dir.mkdir(parents=True)
+    cfg_path = cfg_dir / "config.json"
+    monkeypatch.setattr("spkup.config.CONFIG_DIR", cfg_dir)
+    monkeypatch.setattr("spkup.config.CONFIG_PATH", cfg_path)
+    cfg_path.write_text(json.dumps({"hotkey": "f9", "model_size": "base"}), encoding="utf-8")
+
+    result = load()
+
+    assert result.hotkey == "f9"
+    assert result.vocabulary == []
+    assert result.replacements == {}
+    assert result.post_processing_enabled is False
+
+
+def test_text_processing_fields_round_trip(tmp_path, monkeypatch) -> None:
+    cfg_dir = tmp_path / "spkup"
+    monkeypatch.setattr("spkup.config.CONFIG_DIR", cfg_dir)
+    monkeypatch.setattr("spkup.config.CONFIG_PATH", cfg_dir / "config.json")
+    cfg = AppConfig(
+        vocabulary=["Tempobase"],
+        replacements={"speak up": "spkup"},
+        post_processing_enabled=True,
+        post_processing_provider="openai",
+    )
+
+    save(cfg)
+
+    assert load() == cfg
+    assert "api_key" not in (cfg_dir / "config.json").read_text(encoding="utf-8")
+
+
+def test_mutable_defaults_are_not_shared() -> None:
+    a, b = AppConfig(), AppConfig()
+    a.vocabulary.append("x")
+
+    assert b.vocabulary == []

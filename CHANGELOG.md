@@ -6,6 +6,12 @@ and the source `__version__`.
 
 ## [Unreleased]
 
+### Added
+- Settings → Text: a custom vocabulary that steers Whisper toward your spellings, whole-word
+  replacement rules, and optional LLM post-processing through a local server (Ollama, LM Studio)
+  or OpenAI. The OpenAI key is kept in the system keychain. On any LLM failure the raw text is
+  copied.
+
 ## [0.2.9] — 2026-11
 
 ### Added

@@ -53,6 +53,9 @@ QT_QPA_PLATFORM=offscreen PYTHONPATH=src pytest
 | `app.py` (recording countdown) | `tests/test_app_recording_countdown.py` | Countdown start/refresh/clear lifecycle, handoff into transcribing, and recording-error cleanup |
 | `overlay.py` | `tests/test_overlay.py` | Countdown formatting, low-time urgency flag, clamping, countdown cleanup on hide, waveform history following the level source, fade-out then hide |
 | `transcription_history.py` | `tests/test_transcription_history.py` | Add/list ordering, keep only last 5 entries, delete behavior, Unicode text, duplicate entries remain distinct |
+| `post_processing.py` | `tests/test_post_processing.py` | Replacements (case, word boundary, empty), prompt building, request shape against a local fake HTTP server, auth header only for OpenAI, `<think>` stripping, raw-text fallback on HTTP error / timeout / bad JSON / empty reply / missing key / keyring error, key never logged. `keyring` is always mocked |
+| `transcriber.py` (text pipeline) | `tests/test_transcriber.py` | Vocabulary reaches `initial_prompt` / `hotwords` (None when empty), worker runs LLM then replacements, LLM skipped when disabled or text empty |
+| `settings_dialog.py` (Text tab) | `tests/test_settings_text_tab.py` | Replacement parsing, vocabulary/replacements saved, provider switch defaults and privacy note, key written to `keyring` only when typed |
 
 These are the checks that are suitable for repeatable automated execution. They are run locally with `pytest`, and the same class of checks should remain compatible with CI.
 
@@ -88,6 +91,7 @@ These modules involve Qt widget painting, hardware I/O, or CUDA inference — no
 | `recorder.py` (stream) | Windows and macOS: hold hotkey, speak, release → non-empty array shape printed to stdout. macOS requires Microphone permission. |
 | `transcriber.py` | Audio captured → text transcribed correctly in PT and EN, including mixed PT/EN in one recording; Windows validates CUDA path, Apple Silicon validates the MLX path (log shows `engine=mlx`) and that a silent recording yields no text |
 | `settings_dialog.py` | Dialog opens; hotkey capture works; save writes to `config.json` |
+| Text tab + `post_processing.py` | Dictate "Tempobase", "spkup" and "Diagnet" in three setups: vocabulary only, Ollama with the default local model, and OpenAI. Check the log for post-processing latency. Stop Ollama mid-use: the raw text still lands in the clipboard and a WARNING is logged. The OpenAI key shows up in Keychain Access / Credential Manager under `spkup`, never in `config.json` or the log. Packaged builds on both platforms read the stored key |
 | `playback_mute.py` + recording flow | On Windows, enabling **Mute playback while recording** mutes only during active capture, restores the exact prior mute state on stop, restores after recording error or app quit, and behaves the same for hold-to-record and quick-tap toggle flows. On macOS the control is unavailable. |
 | `transcription_history_window.py` | Window shows newest-first session entries; copy/delete act on the selected entry; close/reopen preserves session history while the app stays running |
 | `app.py` (trigger suppression) | On Windows, rapid repeated tray clicks or hotkey retriggers within 1 second after stop/cancel/error/finalize do not start extra recording/transcription work, and a legitimate stop while recording is active is never blocked |
