@@ -433,7 +433,7 @@ class SettingsDialog(QDialog):
             max(0, self._provider_combo.findData(config.post_processing_provider))
         )
         self._provider = self._provider_combo.currentData()
-        self._provider_fields: dict[str, tuple[str, str]] = {}
+        self._provider_fields: dict[str, tuple[str, str, str]] = {}
         self._provider_combo.currentIndexChanged.connect(self._on_provider_changed)
         llm_layout.addWidget(self._provider_combo)
 
@@ -451,6 +451,25 @@ class SettingsDialog(QDialog):
         llm_layout.addWidget(QLabel("Model"))
         self._llm_model_edit = QLineEdit(config.post_processing_model)
         llm_layout.addWidget(self._llm_model_edit)
+
+        llm_layout.addWidget(QLabel("Thinking / reasoning effort"))
+        self._effort_combo = QComboBox()
+        for label, value in (
+            ("Off (fastest)", "none"),
+            ("Low", "low"),
+            ("Medium", "medium"),
+            ("High", "high"),
+            ("Model default (send nothing)", ""),
+        ):
+            self._effort_combo.addItem(label, value)
+        self._effort_combo.setCurrentIndex(
+            max(0, self._effort_combo.findData(config.post_processing_reasoning_effort))
+        )
+        self._effort_combo.setToolTip(
+            "Sent as reasoning_effort. If the model rejects it, spkup copies the raw text "
+            "and shows the error. Pick \"Model default\" for models without thinking."
+        )
+        llm_layout.addWidget(self._effort_combo)
 
         self._api_key_label = QLabel("API key")
         llm_layout.addWidget(self._api_key_label)
@@ -587,15 +606,24 @@ class SettingsDialog(QDialog):
         self._provider_fields[self._provider] = (
             self._base_url_edit.text(),
             self._llm_model_edit.text(),
+            self._effort_combo.currentData(),
         )
         self._provider = self._provider_combo.currentData()
         defaults = {
-            "local": (AppConfig.post_processing_base_url, AppConfig.post_processing_model),
-            "openai": (OPENAI_BASE_URL, ""),
+            "local": (
+                AppConfig.post_processing_base_url,
+                AppConfig.post_processing_model,
+                AppConfig.post_processing_reasoning_effort,
+            ),
+            # Non-reasoning OpenAI models reject reasoning_effort, so send nothing by default.
+            "openai": (OPENAI_BASE_URL, "", ""),
         }
-        base_url, model = self._provider_fields.get(self._provider, defaults[self._provider])
+        base_url, model, effort = self._provider_fields.get(
+            self._provider, defaults[self._provider]
+        )
         self._base_url_edit.setText(base_url)
         self._llm_model_edit.setText(model)
+        self._effort_combo.setCurrentIndex(self._effort_combo.findData(effort))
         self._update_provider_widgets()
 
     def _update_provider_widgets(self) -> None:
@@ -637,6 +665,7 @@ class SettingsDialog(QDialog):
         self._config.post_processing_provider = self._provider_combo.currentData()
         self._config.post_processing_base_url = self._base_url_edit.text().strip()
         self._config.post_processing_model = self._llm_model_edit.text().strip()
+        self._config.post_processing_reasoning_effort = self._effort_combo.currentData()
         self._config.post_processing_instructions = (
             self._instructions_edit.toPlainText().strip()
         )

@@ -181,3 +181,19 @@ def test_save_warns_once_when_vocabulary_is_capped(dialog_factory) -> None:
 
     box.information.assert_called_once()
     assert len(saved[0].vocabulary) == 100
+
+
+def test_reasoning_effort_saved_and_defaulted_per_provider(dialog_factory) -> None:
+    dialog, _ = dialog_factory(AppConfig())
+    saved: list[AppConfig] = []
+    dialog.settings_saved.connect(saved.append)
+    assert dialog._effort_combo.currentData() == "none"
+
+    dialog._provider_combo.setCurrentIndex(dialog._provider_combo.findData("openai"))
+    assert dialog._effort_combo.currentData() == ""
+
+    dialog._provider_combo.setCurrentIndex(dialog._provider_combo.findData("local"))
+    dialog._effort_combo.setCurrentIndex(dialog._effort_combo.findData("low"))
+    dialog._on_save()
+
+    assert saved[0].post_processing_reasoning_effort == "low"

@@ -51,7 +51,7 @@ No APM, no distributed tracing, no metrics dashboards.
 | Model loaded (first use), elapsed | INFO | `transcriber` |
 | CUDA OOM, falling back to CPU | WARNING | `transcriber` |
 | LLM post-processing completed, latency, provider, model | INFO | `post_processing` |
-| LLM post-processing failed (connection, HTTP, timeout, bad JSON, empty reply, missing key, keyring error), provider, model, reason; raw text used | WARNING | `post_processing` |
+| LLM post-processing failed (connection, HTTP status plus the server's error message, timeout, bad JSON, empty reply, missing key, keyring error), provider, model, reason; raw text used and a tray notification shows the reason | WARNING | `post_processing` |
 | Mic error | ERROR | `recorder` |
 | Settings saved | INFO | `settings_dialog` |
 | Model download progress | DEBUG | `model_manager` |

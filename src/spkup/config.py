@@ -32,6 +32,8 @@ class AppConfig:
     post_processing_base_url: str = "http://localhost:11434/v1"
     post_processing_model: str = "gemma4:e4b"
     post_processing_instructions: str = ""
+    # "" sends nothing (model default); gemma4 and other thinking models are ~5x faster with "none".
+    post_processing_reasoning_effort: str = "none"
 
 
 CONFIG_DIR = user_config_dir()

@@ -146,6 +146,7 @@ class App(QObject):
         # Transcription outputs
         self._transcriber.transcription_finished.connect(self._on_transcription_finished)
         self._transcriber.transcription_error.connect(self._on_transcription_error)
+        self._transcriber.post_processing_failed.connect(self._on_post_processing_failed)
 
         # Hotkey listener (started only after a model is confirmed ready)
         self._listener = HotkeyListener(self._config.hotkey)
@@ -298,6 +299,9 @@ class App(QObject):
                 self._on_transcription_finished
             )
             old_transcriber.transcription_error.disconnect(self._on_transcription_error)
+            old_transcriber.post_processing_failed.disconnect(
+                self._on_post_processing_failed
+            )
 
             self._transcriber = Transcriber(new_config)
             self._recorder.recording_finished.connect(self._transcriber.transcribe)
@@ -305,6 +309,9 @@ class App(QObject):
                 self._on_transcription_finished
             )
             self._transcriber.transcription_error.connect(self._on_transcription_error)
+            self._transcriber.post_processing_failed.connect(
+                self._on_post_processing_failed
+            )
         else:
             # Propagate config changes (e.g. idle-unload timeout) without rebuild.
             self._transcriber.update_config(new_config)
@@ -837,6 +844,15 @@ class App(QObject):
         self._set_retry_action_enabled(False)
         self._overlay.show_state(OverlayState.DONE)
         play_cue("done")
+
+    def _on_post_processing_failed(self, reason: str) -> None:
+        if QSystemTrayIcon.supportsMessages():
+            self._tray.showMessage(
+                "spkup — Post-processing failed",
+                f"The raw transcription was copied. {reason}",
+                QSystemTrayIcon.MessageIcon.Warning,
+                5000,
+            )
 
     def _on_transcription_error(self, msg: str) -> None:
         self._stop_transcription_watchdog()

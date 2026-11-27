@@ -354,7 +354,7 @@ def test_worker_applies_llm_then_replacements() -> None:
     with patch("spkup.transcriber.post_process", return_value="Tempo base, ok.") as pp:
         emitted = _run_worker_with(config, "tempo bass ok")
 
-    pp.assert_called_once_with("tempo bass ok", config)
+    assert pp.call_args.args[:2] == ("tempo bass ok", config)
     assert emitted == ["Tempobase, ok."]
 
 
@@ -406,3 +406,37 @@ def test_cancelled_worker_does_not_call_llm() -> None:
 
     pp.assert_not_called()
     assert emitted == ["secret dictation"]
+
+
+def test_worker_reports_post_processing_failure() -> None:
+    config = AppConfig(post_processing_enabled=True)
+    worker = _TranscriptionWorker(np.zeros(1600, dtype=np.float32), "tiny", "cpu", "int8", config)
+    failures: list[str] = []
+    emitted: list[str] = []
+    worker.post_processing_failed.connect(failures.append)
+    worker.finished.connect(emitted.append)
+
+    def fail(text, _config, on_error):
+        on_error("HTTP 400: Unsupported parameter: 'reasoning_effort'")
+        return text
+
+    with (
+        patch.object(worker, "_run_transcription", return_value="raw"),
+        patch("spkup.transcriber.post_process", side_effect=fail),
+    ):
+        worker.run()
+
+    assert failures == ["HTTP 400: Unsupported parameter: 'reasoning_effort'"]
+    assert emitted == ["raw"]
+
+
+def test_facade_relays_post_processing_failure_only_for_active_job() -> None:
+    t = Transcriber(AppConfig())
+    relayed: list[str] = []
+    t.post_processing_failed.connect(relayed.append)
+    t._active_job_id = 3
+
+    t._on_worker_post_processing_failed(2, "stale")
+    t._on_worker_post_processing_failed(3, "model not found")
+
+    assert relayed == ["model not found"]

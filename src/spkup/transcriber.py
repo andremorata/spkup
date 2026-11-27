@@ -99,6 +99,7 @@ class _TranscriptionWorker(QThread):
 
     finished = pyqtSignal(str)
     error = pyqtSignal(str)
+    post_processing_failed = pyqtSignal(str)
 
     def __init__(
         self,
@@ -125,7 +126,7 @@ class _TranscriptionWorker(QThread):
                 and self._config.post_processing_enabled
                 and not self.isInterruptionRequested()
             ):
-                text = post_process(text, self._config)
+                text = post_process(text, self._config, self.post_processing_failed.emit)
             self.finished.emit(apply_replacements(text, self._config.replacements))
         except Exception as exc:
             _log.error("Transcription error: %s", exc)
@@ -254,6 +255,7 @@ class Transcriber(QObject):
 
     transcription_finished = pyqtSignal(str)
     transcription_error = pyqtSignal(str)
+    post_processing_failed = pyqtSignal(str)
 
     def __init__(self, config: AppConfig) -> None:
         super().__init__()
@@ -411,16 +413,26 @@ class Transcriber(QObject):
         worker._error_slot = lambda message, job_id=job_id: self._on_worker_error(
             job_id, message
         )
+        worker._post_processing_failed_slot = (
+            lambda reason, job_id=job_id: self._on_worker_post_processing_failed(
+                job_id, reason
+            )
+        )
         self._worker = worker
         self._active_job_id = job_id
         worker.finished.connect(worker._finished_slot)
         worker.error.connect(worker._error_slot)
+        worker.post_processing_failed.connect(worker._post_processing_failed_slot)
         worker.start()
 
     def _disconnect_worker_signals(self, worker: _TranscriptionWorker) -> None:
         for signal, slot in (
             (worker.finished, getattr(worker, "_finished_slot", None)),
             (worker.error, getattr(worker, "_error_slot", None)),
+            (
+                worker.post_processing_failed,
+                getattr(worker, "_post_processing_failed_slot", None),
+            ),
         ):
             if slot is None:
                 continue
@@ -486,6 +498,10 @@ class Transcriber(QObject):
         self.cleanup_worker()
         self._restart_idle_timer()
         self.transcription_finished.emit(text)
+
+    def _on_worker_post_processing_failed(self, job_id: int, reason: str) -> None:
+        if job_id == self._active_job_id:
+            self.post_processing_failed.emit(reason)
 
     def _on_worker_error(self, job_id: int, message: str) -> None:
         if job_id != self._active_job_id:

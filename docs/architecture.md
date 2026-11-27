@@ -62,7 +62,7 @@ flowchart TD
 | `platform_support.py` | functions | Platform tags, path selection, platform-specific defaults, and feature capability gates |
 | `hotkey.py` | `HotkeyListener` | pynput keyboard listener; emits `recording_started` / `recording_stopped` on Qt main thread |
 | `recorder.py` | `AudioRecorder` | sounddevice stream; accumulates float32 chunks; exposes the live input loudness via `level()` (0..1, dB-mapped by `rms_to_level`); emits `recording_finished(np.ndarray)` |
-| `transcriber.py` | `Transcriber` | Facade; owns `_TranscriptionWorker` lifecycle; busy guard; emits `transcription_finished(str)` |
+| `transcriber.py` | `Transcriber` | Facade; owns `_TranscriptionWorker` lifecycle; busy guard; emits `transcription_finished(str)` and `post_processing_failed(str)` |
 | `transcriber.py` | `_TranscriptionWorker` | QThread worker; lazy model load; faster-whisper inference, or VAD + mlx-whisper on Apple Silicon; passes the vocabulary as `initial_prompt` (and `hotwords` on faster-whisper); then runs LLM post-processing (if enabled) and the replacements on the same thread; emits result or error |
 | `post_processing.py` | `post_process`, `apply_replacements` | OpenAI-compatible `POST {base_url}/chat/completions` via `urllib` (20 s timeout); returns the raw text on any failure. Reads the OpenAI key from `keyring` (service `spkup`, user `openai-api-key`). Whole-word, case-insensitive replacements |
 | `model_manager.py` | `ModelManager` | Cache dir management; `is_downloaded`; `repo_id` picks the CTranslate2 or MLX repo for the platform engine; `_ModelDownloadWorker` for HuggingFace downloads |
@@ -126,6 +126,9 @@ Transcriber.transcription_finished(text: str)
   → TranscriptionHistoryWindow.set_entries(current list)
   → OverlayWidget.show_state(DONE)         # auto-hides after 1.5 s
   → QSystemTrayIcon.showMessage(preview)
+
+Transcriber.post_processing_failed(reason: str)  # LLM call failed; raw text still follows
+  → QSystemTrayIcon.showMessage(reason)
 
 Transcriber.transcription_error(msg: str)  # or AudioRecorder.recording_error
   → OverlayWidget.show_state(HIDDEN)
@@ -200,6 +203,7 @@ Startup update check
 | `post_processing_base_url` | `"http://localhost:11434/v1"` | OpenAI-compatible base URL; Settings switches it to `https://api.openai.com/v1` for OpenAI |
 | `post_processing_model` | `"gemma4:e4b"` | Model name sent to the server; OpenAI has no default |
 | `post_processing_instructions` | `""` | Free-form instructions appended to the system prompt |
+| `post_processing_reasoning_effort` | `"none"` | Sent as `reasoning_effort` (`none`, `low`, `medium`, `high`). `""` sends nothing (model default). Settings defaults OpenAI to `""` because non-reasoning models reject the field |
 
 The OpenAI API key is never stored in `config.json`. It lives in the OS keychain (macOS Keychain, Windows Credential Manager) through `keyring`.
 

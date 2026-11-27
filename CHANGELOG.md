@@ -11,6 +11,7 @@ and the source `__version__`.
   replacement rules, and optional LLM post-processing through a local server (Ollama, LM Studio)
   or OpenAI. The OpenAI key is kept in the system keychain. On any LLM failure the raw text is
   copied.
+- Settings → Text: a thinking / reasoning effort option for LLM post-processing. It defaults to off, which makes `gemma4:e4b` about 5x faster. A failed LLM call now shows a notification with the reason.
 
 ## [0.2.9] — 2026-11
 

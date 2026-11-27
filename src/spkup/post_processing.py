@@ -4,7 +4,9 @@ import json
 import logging
 import re
 import time
+import urllib.error
 import urllib.request
+from collections.abc import Callable
 
 import keyring
 
@@ -49,8 +51,23 @@ def build_system_prompt(vocabulary: list[str], instructions: str) -> str:
     return "\n\n".join(sections)
 
 
-def post_process(text: str, config: AppConfig) -> str:
-    """Return the LLM-cleaned text, or ``text`` unchanged on any failure."""
+def _describe(exc: Exception) -> str:
+    if isinstance(exc, urllib.error.HTTPError):
+        try:
+            detail = json.loads(exc.read())["error"]["message"]
+        except Exception:
+            detail = exc.reason
+        return f"HTTP {exc.code}: {detail}"
+    return str(exc)
+
+
+def post_process(
+    text: str, config: AppConfig, on_error: Callable[[str], None] | None = None
+) -> str:
+    """Return the LLM-cleaned text, or ``text`` unchanged on any failure.
+
+    ``on_error`` receives a short reason when the call fails.
+    """
     provider = config.post_processing_provider
     model = config.post_processing_model
     started = time.monotonic()
@@ -74,6 +91,8 @@ def post_process(text: str, config: AppConfig) -> str:
                 {"role": "user", "content": f"<transcript>\n{text}\n</transcript>"},
             ],
         }
+        if config.post_processing_reasoning_effort:
+            body["reasoning_effort"] = config.post_processing_reasoning_effort
         request = urllib.request.Request(
             config.post_processing_base_url.rstrip("/") + "/chat/completions",
             data=json.dumps(body).encode("utf-8"),
@@ -85,12 +104,15 @@ def post_process(text: str, config: AppConfig) -> str:
         if not cleaned:
             raise ValueError("empty reply")
     except Exception as exc:
+        reason = _describe(exc)
         _log.warning(
             "Post-processing failed, using raw text (provider=%s, model=%s): %s",
             provider,
             model,
-            exc,
+            reason,
         )
+        if on_error is not None:
+            on_error(reason)
         return text
 
     _log.info(

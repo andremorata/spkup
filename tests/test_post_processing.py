@@ -240,3 +240,32 @@ def test_success_logs_provider_model_and_latency(server_factory, caplog) -> None
 
     assert "provider=local" in caplog.text
     assert "model=tiny-llm" in caplog.text
+
+
+def test_reasoning_effort_sent_when_set_and_omitted_for_model_default(server_factory) -> None:
+    server = server_factory(body=_reply("ok"))
+
+    post_process("raw", _config(server.base_url))
+    post_process("raw", _config(server.base_url, post_processing_reasoning_effort=""))
+
+    assert server.requests[0][1]["reasoning_effort"] == "none"
+    assert "reasoning_effort" not in server.requests[1][1]
+
+
+def test_on_error_gets_server_error_message(server_factory) -> None:
+    body = json.dumps({"error": {"message": "Unsupported parameter: 'reasoning_effort'"}})
+    server = server_factory(status=400, body=body.encode())
+    reasons: list[str] = []
+
+    result = post_process("raw", _config(server.base_url), reasons.append)
+
+    assert result == "raw"
+    assert reasons == ["HTTP 400: Unsupported parameter: 'reasoning_effort'"]
+
+
+def test_on_error_not_called_on_success(server_factory) -> None:
+    server = server_factory(body=_reply("ok"))
+    reasons: list[str] = []
+
+    assert post_process("raw", _config(server.base_url), reasons.append) == "ok"
+    assert reasons == []
