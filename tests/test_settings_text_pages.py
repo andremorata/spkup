@@ -74,7 +74,7 @@ def test_api_key_written_to_keyring_and_never_to_config(dialog_factory) -> None:
     saved: list[AppConfig] = []
     dialog.settings_saved.connect(saved.append)
 
-    dialog._post_processing_group.setChecked(True)
+    dialog._post_processing_toggle.setChecked(True)
     dialog._llm_model_edit.setText("gpt-4.1-mini")
     dialog._api_key_edit.setText("sk-new")
     dialog._on_save()
@@ -127,7 +127,7 @@ def test_save_blocked_when_post_processing_has_no_model(dialog_factory) -> None:
     dialog, _ = dialog_factory(AppConfig(post_processing_provider="openai"))
     saved: list[AppConfig] = []
     dialog.settings_saved.connect(saved.append)
-    dialog._post_processing_group.setChecked(True)
+    dialog._post_processing_toggle.setChecked(True)
     dialog._llm_model_edit.setText("")
 
     with patch("spkup.settings_dialog.QMessageBox") as box:
@@ -142,7 +142,7 @@ def test_save_blocked_when_openai_has_no_key(dialog_factory) -> None:
     dialog, kr = dialog_factory(AppConfig(post_processing_provider="openai"))
     saved: list[AppConfig] = []
     dialog.settings_saved.connect(saved.append)
-    dialog._post_processing_group.setChecked(True)
+    dialog._post_processing_toggle.setChecked(True)
     dialog._llm_model_edit.setText("some-openai-model")
     kr.get_password.return_value = None
 

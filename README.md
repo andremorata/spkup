@@ -70,7 +70,7 @@ worktree.
 
 ## Vocabulary, replacements and LLM post-processing
 
-Open **Settings → Text**.
+Open **Settings → Vocabulary** for the vocabulary and replacements, and **Settings → AI Cleanup** for LLM post-processing.
 
 - **Vocabulary**: one term per line (`Tempobase`, `spkup`). Whisper gets them as a hint, so it leans toward these spellings. It is not a guarantee. Only the first 300 characters of the list reach Whisper.
 - **Replacements**: one `from -> to` rule per line (`temple base -> Tempobase`). They ignore case, match whole words only, and run last.

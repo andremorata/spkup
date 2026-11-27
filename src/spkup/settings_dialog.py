@@ -5,21 +5,23 @@ from typing import cast
 
 import keyring
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QFocusEvent, QKeyEvent, QStandardItemModel
+from PyQt6.QtGui import QColor, QFocusEvent, QKeyEvent, QPalette, QStandardItemModel
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
-    QGroupBox,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QListWidget,
+    QListWidgetItem,
     QMessageBox,
     QPlainTextEdit,
     QProgressDialog,
     QPushButton,
-    QSpinBox,
-    QTabWidget,
+    QScrollArea,
+    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -173,90 +175,221 @@ def parse_replacements(text: str) -> dict[str, str]:
     return rules
 
 
+_PAGE_MARGIN = 24
+_CARD_RADIUS = 10
+
+
+def _secondary(text: str, *, wrap: bool = True) -> QLabel:
+    label = QLabel(text)
+    label.setObjectName("secondary")
+    label.setWordWrap(wrap)
+    return label
+
+
+class _Card(QFrame):
+    """Rounded group of settings rows separated by hairlines, as in System Settings."""
+
+    def __init__(self, title: str = "") -> None:
+        super().__init__()
+        self.setObjectName("card")
+        self._layout = QVBoxLayout(self)
+        self._layout.setContentsMargins(0, 0, 0, 0)
+        self._layout.setSpacing(0)
+        self._title = title
+        self._has_rows = False
+
+    def add(self, widget: QWidget) -> QWidget:
+        if self._has_rows:
+            line = QFrame()
+            line.setObjectName("hairline")
+            line.setFixedHeight(1)
+            self._layout.addWidget(line)
+        self._layout.addWidget(widget)
+        self._has_rows = True
+        return widget
+
+    def row(self, title: str, control: QWidget, description: str = "") -> QWidget:
+        """Title (and optional description) on the left, control on the right."""
+        row = QWidget()
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(14, 10, 14, 10)
+        layout.setSpacing(16)
+        text = QVBoxLayout()
+        text.setSpacing(2)
+        text.addWidget(QLabel(title))
+        if description:
+            text.addWidget(_secondary(description))
+        layout.addLayout(text, 1)
+        layout.addWidget(control, 0, Qt.AlignmentFlag.AlignVCenter)
+        return self.add(row)
+
+    def block(self, title: str, control: QWidget, description: str = "") -> QWidget:
+        """Title and description above a full-width control (text editors)."""
+        row = QWidget()
+        layout = QVBoxLayout(row)
+        layout.setContentsMargins(14, 10, 14, 12)
+        layout.setSpacing(4)
+        layout.addWidget(QLabel(title))
+        if description:
+            layout.addWidget(_secondary(description))
+        layout.addSpacing(4)
+        layout.addWidget(control)
+        return self.add(row)
+
+
+def _section(title: str) -> QLabel:
+    label = QLabel(title)
+    label.setObjectName("section")
+    return label
+
+
+def _page(title: str, *items: QWidget) -> QScrollArea:
+    content = QWidget()
+    content.setObjectName("page")
+    layout = QVBoxLayout(content)
+    layout.setContentsMargins(_PAGE_MARGIN, 18, _PAGE_MARGIN, _PAGE_MARGIN)
+    layout.setSpacing(8)
+    heading = QLabel(title)
+    heading.setObjectName("pageTitle")
+    layout.addWidget(heading)
+    layout.addSpacing(6)
+    for item in items:
+        if isinstance(item, QLabel) and item.objectName() == "section":
+            layout.addSpacing(10)
+        layout.addWidget(item)
+    layout.addStretch()
+    scroll = QScrollArea()
+    scroll.setWidgetResizable(True)
+    scroll.setFrameShape(QFrame.Shape.NoFrame)
+    scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+    scroll.setWidget(content)
+    return scroll
+
+
+def _stylesheet(palette: QPalette) -> str:
+    text = palette.color(QPalette.ColorRole.WindowText)
+    window = palette.color(QPalette.ColorRole.Window)
+    dark = window.lightness() < 128
+    card = window.lighter(125) if dark else palette.color(QPalette.ColorRole.Base)
+    sidebar = window.darker(115) if dark else window.darker(106)
+    hairline = QColor(text)
+    hairline.setAlphaF(0.10)
+    secondary = QColor(text)
+    secondary.setAlphaF(0.55)
+    highlight = palette.color(QPalette.ColorRole.Highlight)
+    field = window.darker(118) if dark else palette.color(QPalette.ColorRole.Base)
+    border = QColor(text)
+    border.setAlphaF(0.16)
+
+    def rgba(color: QColor) -> str:
+        return f"rgba({color.red()},{color.green()},{color.blue()},{color.alphaF():.2f})"
+
+    return f"""
+        QWidget#page {{ background: {window.name()}; }}
+        QListWidget#sidebar {{
+            background: {sidebar.name()}; border: none; outline: none; padding: 10px 8px;
+        }}
+        QListWidget#sidebar::item {{ padding: 7px 10px; border-radius: 6px; margin: 1px 0; }}
+        QListWidget#sidebar::item:selected {{ background: {highlight.name()}; color: white; }}
+        QFrame#card {{ background: {card.name()}; border-radius: {_CARD_RADIUS}px; }}
+        QFrame#hairline {{ background: {rgba(hairline)}; margin: 0 14px; }}
+        QLabel#pageTitle {{ font-size: 20px; font-weight: 600; }}
+        QLabel#section {{ font-size: 12px; font-weight: 600; color: {rgba(secondary)}; padding-left: 4px; }}
+        QLabel#secondary {{ font-size: 11px; color: {rgba(secondary)}; }}
+        QLabel#warning {{ font-size: 11px; color: #E8710A; }}
+        QLineEdit, QPlainTextEdit {{
+            background: {field.name()}; border: 1px solid {rgba(border)}; border-radius: 6px;
+            padding: 5px 8px; selection-background-color: {highlight.name()};
+        }}
+        QLineEdit:focus, QPlainTextEdit:focus {{ border: 1px solid {highlight.name()}; }}
+        QLineEdit:disabled, QPlainTextEdit:disabled {{ color: {rgba(secondary)}; }}
+        QLabel#banner {{
+            background: {highlight.name()}; color: white; padding: 10px 12px; border-radius: 8px;
+        }}
+    """
+
+
 class SettingsDialog(QDialog):
-    """Settings dialog for hotkey, model, device, and overlay position."""
+    """Settings window: a sidebar of sections, each a page of grouped rows."""
 
     settings_saved = pyqtSignal(object)  # AppConfig
 
     def __init__(self, config: AppConfig, first_run: bool = False, parent=None) -> None:
         super().__init__(parent)
         from spkup import __version__
-        self.setWindowTitle(f"spkup — Settings (v{__version__})")
+        self.setWindowTitle("spkup Settings")
         self.setModal(True)
-        self.setMinimumWidth(440)
+        self.resize(780, 580)
+        self.setMinimumSize(700, 480)
+        self.setStyleSheet(_stylesheet(self.palette()))
 
         # Work on a copy so Cancel discards all changes
         self._config = dataclasses.replace(config)
         self._download_worker: _ModelDownloadWorker | None = None
         self._progress_dlg: QProgressDialog | None = None
 
-        main_layout = QVBoxLayout(self)
-        main_layout.setSpacing(12)
+        pages = [
+            ("General", self._build_general_page(config)),
+            ("Transcription", self._build_transcription_page(config, first_run)),
+            ("Vocabulary", self._build_vocabulary_page(config)),
+            ("AI Cleanup", self._build_cleanup_page(config)),
+        ]
 
-        if first_run:
-            banner = QLabel(
-                "Welcome to spkup!\n"
-                "Choose a Whisper model below and click Download to get started."
-            )
-            banner.setWordWrap(True)
-            banner.setStyleSheet(
-                "background:#1565C0; color:#ffffff; padding:10px; border-radius:6px;"
-            )
-            main_layout.addWidget(banner)
+        self._sidebar = QListWidget()
+        self._sidebar.setObjectName("sidebar")
+        self._sidebar.setFixedWidth(190)
+        self._stack = QStackedWidget()
+        for name, page in pages:
+            self._sidebar.addItem(QListWidgetItem(name))
+            self._stack.addWidget(page)
+        self._sidebar.currentRowChanged.connect(self._stack.setCurrentIndex)
+        # First run lands on the model, which must be downloaded before anything works.
+        self._sidebar.setCurrentRow(1 if first_run else 0)
 
-        # ── Tab widget ───────────────────────────────────────────────────
-        tabs = QTabWidget()
-        main_layout.addWidget(tabs)
+        footer = QWidget()
+        footer_layout = QHBoxLayout(footer)
+        footer_layout.setContentsMargins(_PAGE_MARGIN, 10, _PAGE_MARGIN, 14)
+        footer_layout.addWidget(_secondary(f"spkup {__version__}", wrap=False))
+        footer_layout.addStretch()
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.clicked.connect(self.reject)
+        save_btn = QPushButton("Save")
+        save_btn.setDefault(True)
+        save_btn.clicked.connect(self._on_save)
+        footer_layout.addWidget(cancel_btn)
+        footer_layout.addWidget(save_btn)
 
-        # ═══════════════ General tab ═══════════════
-        general_tab = QWidget()
-        gen_layout = QVBoxLayout(general_tab)
-        gen_layout.setSpacing(12)
+        right = QWidget()
+        right_layout = QVBoxLayout(right)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(0)
+        right_layout.addWidget(self._stack, 1)
+        right_layout.addWidget(footer)
 
-        # ── Hotkey ──────────────────────────────────────────────────────────
+        root = QHBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+        root.addWidget(self._sidebar)
+        root.addWidget(right, 1)
+
+    # ---------- Pages --------------------------------------------------------
+
+    def _build_general_page(self, config: AppConfig) -> QScrollArea:
         self._hotkey_edit = HotkeyEdit(config.hotkey)
+        self._hotkey_edit.setFixedWidth(200)
+        self._hotkey_edit.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._hotkey_edit.hotkey_changed.connect(
             lambda v: setattr(self._config, "hotkey", v)
         )
-        gen_layout.addWidget(QLabel("Hotkey"))
-        gen_layout.addWidget(self._hotkey_edit)
-
-        # ── Model ────────────────────────────────────────────────────────────
-        gen_layout.addWidget(QLabel("Model size"))
-        model_row = QWidget()
-        model_row_layout = QHBoxLayout(model_row)
-        model_row_layout.setContentsMargins(0, 0, 0, 0)
-
-        self._model_combo = QComboBox()
-        for m in _MODELS:
-            badge = "✓" if is_downloaded(m) else "↓"
-            size = format_model_size(m)
-            suffix = f" ({size})" if size else ""
-            self._model_combo.addItem(f"{badge}  {m}{suffix}", m)
-        idx = _MODELS.index(config.model_size) if config.model_size in _MODELS else 0
-        self._model_combo.setCurrentIndex(idx)
-        self._model_combo.currentIndexChanged.connect(self._on_model_changed)
-
-        self._download_btn = QPushButton("Download")
-        self._download_btn.clicked.connect(self._on_download)
-        self._download_btn.setVisible(not is_downloaded(config.model_size))
-        self._download_btn.setToolTip(self._download_tooltip(config.model_size))
-
-        self._delete_btn = QPushButton("Delete")
-        self._delete_btn.clicked.connect(self._on_delete)
-        self._delete_btn.setVisible(is_downloaded(config.model_size))
-        self._delete_btn.setToolTip(
-            "Remove this model from the local cache to free disk space."
+        shortcut = _Card()
+        shortcut.row(
+            "Push-to-talk shortcut",
+            self._hotkey_edit,
+            "Hold to record, release to transcribe. Click the field, then press the keys.",
         )
 
-        model_row_layout.addWidget(self._model_combo, 1)
-        model_row_layout.addWidget(self._download_btn)
-        model_row_layout.addWidget(self._delete_btn)
-        gen_layout.addWidget(model_row)
-
-        # ── Microphone ───────────────────────────────────────────────────────
-        gen_layout.addWidget(QLabel("Microphone"))
         self._mic_combo = QComboBox()
+        self._mic_combo.setFixedWidth(260)
         self._mic_combo.addItem("System default", None)
         current_mic = config.input_device
         selected_idx = 0
@@ -278,18 +411,114 @@ class SettingsDialog(QDialog):
                 self._config, "input_device", self._mic_combo.itemData(idx)
             )
         )
-        gen_layout.addWidget(self._mic_combo)
 
-        # ── Device ───────────────────────────────────────────────────────────
-        device_label = QLabel("Device")
-        gen_layout.addWidget(device_label)
+        self._mute_playback_checkbox = QCheckBox()
+        self._mute_playback_checkbox.setChecked(config.mute_playback_while_recording)
+        mute_description = "Silence other audio while you speak."
+        if not supports_playback_mute():
+            self._mute_playback_checkbox.setChecked(False)
+            self._mute_playback_checkbox.setEnabled(False)
+            mute_description = "Available on Windows only."
+            self._config.mute_playback_while_recording = False
+        self._mute_playback_checkbox.toggled.connect(
+            lambda checked: setattr(self._config, "mute_playback_while_recording", checked)
+        )
+        audio = _Card()
+        audio.row("Microphone", self._mic_combo)
+        audio.row("Mute playback while recording", self._mute_playback_checkbox, mute_description)
+
+        self._overlay_combo = QComboBox()
+        self._overlay_combo.setFixedWidth(180)
+        for value in (
+            "bottom-center", "bottom-left", "bottom-right",
+            "top-center", "top-left", "top-right",
+        ):
+            self._overlay_combo.addItem(value.replace("-", " ").capitalize(), value)
+        self._overlay_combo.setCurrentIndex(
+            max(0, self._overlay_combo.findData(config.overlay_position))
+        )
+        self._overlay_combo.currentIndexChanged.connect(
+            lambda _i: setattr(self._config, "overlay_position", self._overlay_combo.currentData())
+        )
+        overlay = _Card()
+        overlay.row(
+            "Overlay position",
+            self._overlay_combo,
+            "Where the recording indicator appears on screen.",
+        )
+
+        self._updates_checkbox = QCheckBox()
+        self._updates_checkbox.setChecked(config.check_updates_on_startup)
+        self._updates_checkbox.toggled.connect(
+            lambda checked: setattr(self._config, "check_updates_on_startup", checked)
+        )
+        updates = _Card()
+        updates.row(
+            "Check for updates on startup",
+            self._updates_checkbox,
+            "spkup asks before downloading or installing anything.",
+        )
+
+        return _page(
+            "General",
+            _section("Shortcut"), shortcut,
+            _section("Audio"), audio,
+            _section("Appearance"), overlay,
+            _section("Updates"), updates,
+        )
+
+    def _build_transcription_page(self, config: AppConfig, first_run: bool) -> QScrollArea:
+        items: list[QWidget] = []
+        if first_run:
+            banner = QLabel(
+                "Welcome to spkup! Pick a Whisper model and click Download to get started."
+            )
+            banner.setObjectName("banner")
+            banner.setWordWrap(True)
+            items.append(banner)
+
+        self._model_combo = QComboBox()
+        self._model_combo.setFixedWidth(220)
+        for m in _MODELS:
+            badge = "✓" if is_downloaded(m) else "↓"
+            size = format_model_size(m)
+            suffix = f" ({size})" if size else ""
+            self._model_combo.addItem(f"{badge}  {m}{suffix}", m)
+        idx = _MODELS.index(config.model_size) if config.model_size in _MODELS else 0
+        self._model_combo.setCurrentIndex(idx)
+        self._model_combo.currentIndexChanged.connect(self._on_model_changed)
+
+        self._download_btn = QPushButton("Download")
+        self._download_btn.clicked.connect(self._on_download)
+        self._download_btn.setVisible(not is_downloaded(config.model_size))
+        self._download_btn.setToolTip(self._download_tooltip(config.model_size))
+
+        self._delete_btn = QPushButton("Delete")
+        self._delete_btn.clicked.connect(self._on_delete)
+        self._delete_btn.setVisible(is_downloaded(config.model_size))
+        self._delete_btn.setToolTip("Remove this model from the local cache to free disk space.")
+
+        model_controls = QWidget()
+        model_layout = QHBoxLayout(model_controls)
+        model_layout.setContentsMargins(0, 0, 0, 0)
+        model_layout.addWidget(self._model_combo)
+        model_layout.addWidget(self._download_btn)
+        model_layout.addWidget(self._delete_btn)
+
+        model = _Card()
+        model.row(
+            "Whisper model",
+            model_controls,
+            "Larger models are more accurate and slower. ✓ means downloaded.",
+        )
+
         self._device_combo = QComboBox()
+        self._device_combo.setFixedWidth(120)
         self._device_combo.addItems(["cuda", "cpu"])
-        has_cuda = _detect_cuda()
-        if not has_cuda:
-            model = cast(QStandardItemModel | None, self._device_combo.model())
-            if model is not None:
-                item = model.item(0)
+        if not _detect_cuda():
+            items_model = cast(QStandardItemModel | None, self._device_combo.model())
+            if items_model is not None:
+                item = items_model.item(0)
                 if item is not None:
                     item.setEnabled(False)
             self._device_combo.setCurrentText("cpu")
@@ -299,134 +528,84 @@ class SettingsDialog(QDialog):
         self._device_combo.currentTextChanged.connect(
             lambda v: setattr(self._config, "device", v)
         )
-        gen_layout.addWidget(self._device_combo)
 
-        # ── Compute type ─────────────────────────────────────────────────────
-        compute_label = QLabel("Compute type")
-        gen_layout.addWidget(compute_label)
         self._compute_combo = QComboBox()
+        self._compute_combo.setFixedWidth(120)
         self._compute_combo.addItems(["float16", "int8", "float32"])
         self._compute_combo.setCurrentText(config.compute_type)
         self._compute_combo.currentTextChanged.connect(
             lambda v: setattr(self._config, "compute_type", v)
         )
-        gen_layout.addWidget(self._compute_combo)
 
         # MLX always runs on the Apple GPU; device and compute type do not apply.
-        if uses_mlx_engine():
-            for widget in (device_label, self._device_combo, compute_label, self._compute_combo):
-                widget.setVisible(False)
+        if not uses_mlx_engine():
+            model.row("Device", self._device_combo, "CUDA needs an NVIDIA GPU.")
+            model.row("Compute type", self._compute_combo, "int8 uses the least memory.")
 
-        # ── Playback ──────────────────────────────────────────────────────────
-        self._mute_playback_checkbox = QCheckBox("Mute playback while recording")
-        self._mute_playback_checkbox.setChecked(
-            config.mute_playback_while_recording
+        self._idle_unload_combo = QComboBox()
+        self._idle_unload_combo.setFixedWidth(140)
+        minutes = sorted({0, 5, 10, 15, 30, 60, 120, 240, config.model_idle_unload_minutes})
+        for value in minutes:
+            self._idle_unload_combo.addItem("Never" if value == 0 else f"After {value} min", value)
+        self._idle_unload_combo.setCurrentIndex(
+            self._idle_unload_combo.findData(config.model_idle_unload_minutes)
         )
-        self._mute_playback_checkbox.setToolTip(
-            "Temporarily mute playback output while recording is active."
-        )
-        if not supports_playback_mute():
-            self._mute_playback_checkbox.setChecked(False)
-            self._mute_playback_checkbox.setEnabled(False)
-            self._mute_playback_checkbox.setToolTip(
-                "Playback muting is currently available only on Windows."
-            )
-            self._config.mute_playback_while_recording = False
-        self._mute_playback_checkbox.toggled.connect(
-            lambda checked: setattr(
+        self._idle_unload_combo.currentIndexChanged.connect(
+            lambda _i: setattr(
                 self._config,
-                "mute_playback_while_recording",
-                checked,
+                "model_idle_unload_minutes",
+                self._idle_unload_combo.currentData(),
             )
         )
-        gen_layout.addWidget(self._mute_playback_checkbox)
-
-        # ── Updates ───────────────────────────────────────────────────────────
-        self._updates_checkbox = QCheckBox("Check for updates on startup")
-        self._updates_checkbox.setChecked(config.check_updates_on_startup)
-        self._updates_checkbox.setToolTip(
-            "Look for newer GitHub Releases when spkup starts. "
-            "You will be asked before any update is downloaded or applied."
+        memory = _Card()
+        memory.row(
+            "Unload model after inactivity",
+            self._idle_unload_combo,
+            "Frees memory when idle. The next dictation reloads it, which takes a few seconds.",
         )
-        self._updates_checkbox.toggled.connect(
-            lambda checked: setattr(self._config, "check_updates_on_startup", checked)
-        )
-        gen_layout.addWidget(self._updates_checkbox)
 
-        # ── Model idle unload ─────────────────────────────────────────────────
-        gen_layout.addWidget(QLabel("Unload model after inactivity"))
-        self._idle_unload_spin = QSpinBox()
-        self._idle_unload_spin.setRange(0, 240)
-        self._idle_unload_spin.setSuffix(" min")
-        self._idle_unload_spin.setSpecialValueText("Never")
-        self._idle_unload_spin.setToolTip(
-            "Automatically unload the Whisper model from memory after this many "
-            "minutes of inactivity. Set to 0 to keep the model loaded indefinitely."
-        )
-        self._idle_unload_spin.setValue(config.model_idle_unload_minutes)
-        self._idle_unload_spin.valueChanged.connect(
-            lambda v: setattr(self._config, "model_idle_unload_minutes", v)
-        )
-        gen_layout.addWidget(self._idle_unload_spin)
+        items += [_section("Model"), model, _section("Memory"), memory]
+        return _page("Transcription", *items)
 
-        gen_layout.addStretch()
-
-        tabs.addTab(general_tab, "General")
-
-        # ═══════════════ Overlay tab ═══════════════
-        overlay_tab = QWidget()
-        ovl_layout = QVBoxLayout(overlay_tab)
-        ovl_layout.setSpacing(12)
-
-        # ── Overlay position ─────────────────────────────────────────────────
-        ovl_layout.addWidget(QLabel("Overlay position"))
-        self._overlay_combo = QComboBox()
-        self._overlay_combo.addItems(
-            ["bottom-right", "bottom-center", "bottom-left",
-             "top-right", "top-center", "top-left"]
-        )
-        self._overlay_combo.setCurrentText(config.overlay_position)
-        self._overlay_combo.currentTextChanged.connect(
-            lambda v: setattr(self._config, "overlay_position", v)
-        )
-        ovl_layout.addWidget(self._overlay_combo)
-
-        ovl_layout.addStretch()
-
-        tabs.addTab(overlay_tab, "Overlay")
-
-        # ═══════════════ Text tab ═══════════════
-        text_tab = QWidget()
-        text_layout = QVBoxLayout(text_tab)
-        text_layout.setSpacing(12)
-
-        text_layout.addWidget(QLabel("Vocabulary (one term per line)"))
+    def _build_vocabulary_page(self, config: AppConfig) -> QScrollArea:
         self._vocabulary_edit = QPlainTextEdit("\n".join(config.vocabulary))
-        self._vocabulary_edit.setMaximumHeight(80)
-        self._vocabulary_edit.setPlaceholderText("Tempobase\nspkup")
-        self._vocabulary_edit.setToolTip(
-            "Names and terms Whisper should spell this way. It is a hint, not a guarantee."
-        )
-        text_layout.addWidget(self._vocabulary_edit)
+        self._vocabulary_edit.setPlaceholderText("Tempobase\nspkup\nDiagnet")
+        self._vocabulary_edit.setFixedHeight(120)
 
-        text_layout.addWidget(QLabel("Replacements (one \"from -> to\" per line)"))
         self._replacements_edit = QPlainTextEdit(
             "\n".join(f"{source} -> {target}" for source, target in config.replacements.items())
         )
-        self._replacements_edit.setMaximumHeight(80)
-        self._replacements_edit.setPlaceholderText("temple base -> Tempobase")
-        self._replacements_edit.setToolTip(
-            "Applied last, ignoring case and matching whole words only."
+        self._replacements_edit.setPlaceholderText("temple base -> Tempobase\nspeak up -> spkup")
+        self._replacements_edit.setFixedHeight(120)
+
+        vocabulary = _Card()
+        vocabulary.block(
+            "Vocabulary",
+            self._vocabulary_edit,
+            "Names and terms Whisper should spell your way, one per line. "
+            "It is a strong hint, not a guarantee.",
         )
-        text_layout.addWidget(self._replacements_edit)
+        replacements = _Card()
+        replacements.block(
+            "Replacements",
+            self._replacements_edit,
+            "One “from -> to” rule per line. Applied last, ignoring case, whole words only.",
+        )
+        return _page("Vocabulary", vocabulary, replacements)
 
-        self._post_processing_group = QGroupBox("Post-process with an LLM")
-        self._post_processing_group.setCheckable(True)
-        self._post_processing_group.setChecked(config.post_processing_enabled)
-        llm_layout = QVBoxLayout(self._post_processing_group)
+    def _build_cleanup_page(self, config: AppConfig) -> QScrollArea:
+        self._post_processing_toggle = QCheckBox()
+        self._post_processing_toggle.setChecked(config.post_processing_enabled)
+        toggle = _Card()
+        toggle.row(
+            "Clean up with an LLM",
+            self._post_processing_toggle,
+            "A language model fixes errors, punctuation and casing and follows your "
+            "instructions. If it fails, the raw text is copied and a notification says why.",
+        )
 
-        llm_layout.addWidget(QLabel("Provider"))
         self._provider_combo = QComboBox()
+        self._provider_combo.setFixedWidth(240)
         self._provider_combo.addItem("Local (Ollama, LM Studio)", "local")
         self._provider_combo.addItem("OpenAI", "openai")
         self._provider_combo.setCurrentIndex(
@@ -435,25 +614,18 @@ class SettingsDialog(QDialog):
         self._provider = self._provider_combo.currentData()
         self._provider_fields: dict[str, tuple[str, str, str]] = {}
         self._provider_combo.currentIndexChanged.connect(self._on_provider_changed)
-        llm_layout.addWidget(self._provider_combo)
 
-        self._privacy_note = QLabel(
-            "Your transcribed text is sent to OpenAI and leaves this machine."
-        )
+        self._privacy_note = QLabel("Your transcribed text is sent to OpenAI and leaves this Mac.")
+        self._privacy_note.setObjectName("warning")
         self._privacy_note.setWordWrap(True)
-        self._privacy_note.setStyleSheet("color:#E65100;")
-        llm_layout.addWidget(self._privacy_note)
 
-        llm_layout.addWidget(QLabel("Base URL"))
         self._base_url_edit = QLineEdit(config.post_processing_base_url)
-        llm_layout.addWidget(self._base_url_edit)
-
-        llm_layout.addWidget(QLabel("Model"))
+        self._base_url_edit.setFixedWidth(240)
         self._llm_model_edit = QLineEdit(config.post_processing_model)
-        llm_layout.addWidget(self._llm_model_edit)
+        self._llm_model_edit.setFixedWidth(240)
 
-        llm_layout.addWidget(QLabel("Thinking / reasoning effort"))
         self._effort_combo = QComboBox()
+        self._effort_combo.setFixedWidth(240)
         for label, value in (
             ("Off (fastest)", "none"),
             ("Low", "low"),
@@ -465,45 +637,54 @@ class SettingsDialog(QDialog):
         self._effort_combo.setCurrentIndex(
             max(0, self._effort_combo.findData(config.post_processing_reasoning_effort))
         )
-        self._effort_combo.setToolTip(
-            "Sent as reasoning_effort. If the model rejects it, spkup copies the raw text "
-            "and shows the error. Pick \"Model default\" for models without thinking."
-        )
-        llm_layout.addWidget(self._effort_combo)
 
-        self._api_key_label = QLabel("API key")
-        llm_layout.addWidget(self._api_key_label)
         self._api_key_edit = QLineEdit()
+        self._api_key_edit.setFixedWidth(240)
         self._api_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
-        llm_layout.addWidget(self._api_key_edit)
 
-        llm_layout.addWidget(QLabel("Instructions"))
+        provider = _Card()
+        provider_row = provider.row("Provider", self._provider_combo)
+        provider_row.layout().itemAt(0).layout().addWidget(self._privacy_note)
+        provider.row("Base URL", self._base_url_edit)
+        provider.row("Model", self._llm_model_edit)
+        provider.row(
+            "Thinking",
+            self._effort_combo,
+            "Off is fastest. Pick “Model default” if the model rejects the setting.",
+        )
+        self._api_key_row = provider.row(
+            "API key", self._api_key_edit, "Kept in the system keychain, never in config files."
+        )
+
         self._instructions_edit = QPlainTextEdit(config.post_processing_instructions)
-        self._instructions_edit.setMaximumHeight(80)
-        self._instructions_edit.setPlaceholderText("e.g. Use a formal tone. Format lists as bullets.")
-        llm_layout.addWidget(self._instructions_edit)
+        self._instructions_edit.setPlaceholderText(
+            "e.g. Use a formal tone. Format lists as bullets."
+        )
+        self._instructions_edit.setFixedHeight(120)
+        instructions = _Card()
+        instructions.block(
+            "Instructions",
+            self._instructions_edit,
+            "Extra guidance for the model. Your vocabulary is always included.",
+        )
 
-        text_layout.addWidget(self._post_processing_group)
+        self._cleanup_details = (provider, instructions)
+        self._post_processing_toggle.toggled.connect(self._update_cleanup_enabled)
+        self._update_cleanup_enabled(config.post_processing_enabled)
         self._update_provider_widgets()
 
-        tabs.addTab(text_tab, "Text")
-
-        # ── Buttons ───────────────────────────────────────────────────────────
-        main_layout.addSpacing(8)
-        btn_row = QWidget()
-        btn_layout = QHBoxLayout(btn_row)
-        btn_layout.setContentsMargins(0, 0, 0, 0)
-        btn_layout.addStretch()
-        save_btn = QPushButton("Save")
-        save_btn.setDefault(True)
-        save_btn.clicked.connect(self._on_save)
-        cancel_btn = QPushButton("Cancel")
-        cancel_btn.clicked.connect(self.reject)
-        btn_layout.addWidget(save_btn)
-        btn_layout.addWidget(cancel_btn)
-        main_layout.addWidget(btn_row)
+        return _page(
+            "AI Cleanup",
+            toggle,
+            _section("Connection"), provider,
+            _section("Prompt"), instructions,
+        )
 
     # ---------- Slots --------------------------------------------------------
+
+    def _update_cleanup_enabled(self, enabled: bool) -> None:
+        for card in self._cleanup_details:
+            card.setEnabled(enabled)
 
     def _on_model_changed(self, index: int) -> None:
         model_size = self._model_combo.currentData()
@@ -628,7 +809,7 @@ class SettingsDialog(QDialog):
 
     def _update_provider_widgets(self) -> None:
         openai = self._is_openai()
-        for widget in (self._privacy_note, self._api_key_label, self._api_key_edit):
+        for widget in (self._privacy_note, self._api_key_row, self._api_key_edit):
             widget.setVisible(openai)
         self._llm_model_edit.setPlaceholderText("OpenAI model name" if openai else "")
         if not openai:
@@ -644,7 +825,7 @@ class SettingsDialog(QDialog):
         )
 
     def _on_save(self) -> None:
-        if self._post_processing_group.isChecked() and not (
+        if self._post_processing_toggle.isChecked() and not (
             self._base_url_edit.text().strip() and self._llm_model_edit.text().strip()
         ):
             QMessageBox.warning(
@@ -661,7 +842,7 @@ class SettingsDialog(QDialog):
         self._config.replacements = parse_replacements(
             self._replacements_edit.toPlainText()
         )
-        self._config.post_processing_enabled = self._post_processing_group.isChecked()
+        self._config.post_processing_enabled = self._post_processing_toggle.isChecked()
         self._config.post_processing_provider = self._provider_combo.currentData()
         self._config.post_processing_base_url = self._base_url_edit.text().strip()
         self._config.post_processing_model = self._llm_model_edit.text().strip()
@@ -676,7 +857,7 @@ class SettingsDialog(QDialog):
             except Exception as exc:
                 QMessageBox.warning(self, "API key not saved", str(exc))
                 return
-        if self._post_processing_group.isChecked() and self._is_openai() and not api_key:
+        if self._post_processing_toggle.isChecked() and self._is_openai() and not api_key:
             try:
                 stored = bool(keyring.get_password(KEYRING_SERVICE, KEYRING_USERNAME))
             except Exception:
