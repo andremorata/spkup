@@ -6,6 +6,8 @@ and the source `__version__`.
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-11
+
 ### Added
 - Redesigned Settings window: a sidebar with General, Transcription, Vocabulary and AI Cleanup pages, each a set of grouped rows with short explanations.
 - Settings: a custom vocabulary that steers Whisper toward your spellings, whole-word
